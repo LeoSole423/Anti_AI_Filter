@@ -16,7 +16,7 @@ import re
 import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Literal, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -36,6 +36,7 @@ LEVEL_PARAMS = {
     "strong": dict(warp=0.46, texture=0.48, illumination=0.065, distractors=1.05, resample=0.80, jpeg=82, perspective=0.011, blur=0.48),
     "max_readable": dict(warp=0.58, texture=0.60, illumination=0.08, distractors=1.30, resample=0.76, jpeg=80, perspective=0.014, blur=0.58),
 }
+MAX_VARIANT_ATTEMPTS = 10
 
 
 @dataclass
@@ -92,6 +93,29 @@ class PerspectiveTransform:
         x, y = self.crop_origin
         h, w = self.output_shape
         return x, y, w, h
+
+
+@dataclass
+class AttemptResult:
+    attempt: int
+    scale: float
+    amp_px: float
+    perspective_used: float
+    jacobian_min: float
+    validation: ValidationResult
+    failure_reasons: List[str]
+    metadata: Dict
+
+
+@dataclass
+class VariantResult:
+    level: str
+    status: Literal["PASS", "FAIL"]
+    image: Optional[np.ndarray]
+    validation: Optional[ValidationResult]
+    attempts: List[AttemptResult]
+    failure_reasons: List[str]
+    candidate_masks: Optional[Dict[str, np.ndarray]]
 
 
 def _normalize_field(field: np.ndarray) -> np.ndarray:
@@ -509,15 +533,53 @@ def make_image_only_pdf(raster_path: Path, pdf_path: Path) -> None:
     c.showPage(); c.save()
 
 
-def generate_variant(original_rgb: np.ndarray, wall_mask: np.ndarray, masks: Dict[str,np.ndarray], marker: np.ndarray, wall_width: float, level: str, seed: int, no_perspective: bool=False, debug_dir: Optional[Path]=None) -> Tuple[np.ndarray, ValidationResult, Dict, Dict[str,np.ndarray]]:
+def validation_failure_reasons(validation: ValidationResult) -> List[str]:
+    """Return stable, machine-readable reasons for a failed attempt."""
+    checks = (
+        ("jacobian", validation.jacobian),
+        ("wall_components", validation.wall_components),
+        ("free_space_components", validation.free_space_components),
+        ("euler", validation.euler),
+        ("no_crop", validation.no_crop),
+        ("wall_core_integrity", validation.wall_core_integrity),
+    )
+    return [name for name, passed in checks if not passed]
+
+
+def _save_failed_variant_debug(debug_dir: Path, level: str, attempts: List[AttemptResult],
+                               failure_reasons: List[str], payload: Optional[Tuple]) -> None:
+    failed_dir = debug_dir / "failed" / level
+    failed_dir.mkdir(parents=True, exist_ok=True)
+    (failed_dir / "attempts.json").write_text(json.dumps({
+        "level": level,
+        "status": "FAIL",
+        "failure_reasons": failure_reasons,
+        "attempts": [asdict(item) for item in attempts],
+    }, indent=2, ensure_ascii=False), encoding="utf-8")
+    (failed_dir / "failure_reasons.json").write_text(json.dumps(failure_reasons, indent=2, ensure_ascii=False), encoding="utf-8")
+    if attempts:
+        (failed_dir / "validation.json").write_text(json.dumps(asdict(attempts[-1].validation), indent=2, ensure_ascii=False), encoding="utf-8")
+    if payload is None:
+        return
+    _, _, _, candidate_masks, dx, dy, jac, _ = payload
+    cv2.imwrite(str(failed_dir / "final_displacement.png"), np.clip(
+        np.dstack([_normalize_field(dx), _normalize_field(dy), np.zeros_like(dx)]) * 127.5 + 127.5,
+        0, 255).astype(np.uint8))
+    cv2.imwrite(str(failed_dir / "final_jacobian.png"), cv2.normalize(jac, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8))
+    for name in ("wall_mask", "wall_core", "wall_edge", "corridor_core"):
+        cv2.imwrite(str(failed_dir / f"final_{name}.png"), candidate_masks[name] * 255)
+
+
+def generate_variant(original_rgb: np.ndarray, wall_mask: np.ndarray, masks: Dict[str,np.ndarray], marker: np.ndarray,
+                    wall_width: float, level: str, seed: int, no_perspective: bool=False,
+                    debug_dir: Optional[Path]=None, validator=validate_topology,
+                    max_attempts: int=MAX_VARIANT_ATTEMPTS, save_success_debug: bool=True) -> VariantResult:
     p=LEVEL_PARAMS[level]; base_rng=np.random.default_rng(seed)
     amp=float(p["warp"]*wall_width)
-    best=None
-    for attempt in range(1,11):
+    attempts: List[AttemptResult] = []
+    last_payload = None
+    for attempt in range(1, max_attempts + 1):
         rng=np.random.default_rng(seed + attempt*100003)
-        # Retry with a substantially safer warp.  This reaches a near-zero
-        # fallback within ten attempts, while preserving the requested level
-        # on the first successful attempt.
         scale=0.65**(attempt-1)
         dx,dy=generate_displacement_field(original_rgb.shape[:2],rng,amp*scale)
         jac_ok,jmin,jac=validate_displacement_jacobian(dx,dy)
@@ -529,10 +591,8 @@ def generate_variant(original_rgb: np.ndarray, wall_mask: np.ndarray, masks: Dic
         mm=apply_elastic_warp(marker,dx,dy,cv2.INTER_NEAREST,cv2.BORDER_CONSTANT,0)
         perspective_requested=not no_perspective
         perspective_used=p["perspective"]*scale if perspective_requested else 0.0
-        perspective_transform=build_perspective_transform(
-            original_rgb.shape[:2], rng, perspective_used,
-            extra_margin_px=max(2, int(round(wall_width))))
-        # One H is generated above and applied to RGB and every structural plane.
+        perspective_transform=build_perspective_transform(original_rgb.shape[:2], rng, perspective_used,
+                                                           extra_margin_px=max(2, int(round(wall_width))))
         warped=apply_perspective_transform(warped,perspective_transform,cv2.INTER_LINEAR,border_value=(255,255,255))
         wm_full=apply_perspective_transform(wm,perspective_transform,cv2.INTER_NEAREST,border_value=0,crop=False)
         wm=apply_perspective_transform(wm,perspective_transform,cv2.INTER_NEAREST,border_value=0)
@@ -540,57 +600,57 @@ def generate_variant(original_rgb: np.ndarray, wall_mask: np.ndarray, masks: Dic
         we=apply_perspective_transform(we,perspective_transform,cv2.INTER_NEAREST,border_value=0)
         cor=apply_perspective_transform(cor,perspective_transform,cv2.INTER_NEAREST,border_value=0)
         mm=apply_perspective_transform(mm,perspective_transform,cv2.INTER_NEAREST,border_value=0)
-        # Keep the independently warped wall mask as the topology reference.
-        # Dilation here would be visually tempting but could close a narrow
-        # passage.  Include any core pixel lost to a one-pixel sampling tie;
-        # this cannot create a new dark segment because it is part of the
-        # protected source core.
         core_bin=(wc>0).astype(np.uint8)
         structural=np.maximum((wm>0).astype(np.uint8), core_bin)
         edge_bin=np.maximum((we>0).astype(np.uint8),cv2.subtract(structural,core_bin))
         corridor_bin=cv2.subtract((cor>0).astype(np.uint8),structural)
         candidate_masks={"wall_mask":structural,"wall_core":core_bin,"wall_edge":edge_bin,"corridor_core":corridor_bin}
         crop_recall=calculate_crop_recall(wm_full,perspective_transform.crop_window)
-        val=validate_topology(wall_mask,candidate_masks["wall_mask"],masks["wall_core"],candidate_masks["wall_core"],jacobian_min=jmin,crop_recall=crop_recall)
+        val=validator(wall_mask,candidate_masks["wall_mask"],masks["wall_core"],candidate_masks["wall_core"],
+                      jacobian_min=jmin,crop_recall=crop_recall)
         val.jacobian = jac_ok
-        best=(warped,val,dict(
-            attempt=attempt, scale=scale, amp_px=amp*scale,
-            jacobian_min=jmin, perspective_requested=perspective_requested,
-            perspective_used=perspective_used,
-            src_corners=perspective_transform.src.tolist(),
-            dst_corners=perspective_transform.dst.tolist(),
+        metadata=dict(attempt=attempt, scale=scale, amp_px=amp*scale, jacobian_min=jmin,
+            perspective_requested=perspective_requested, perspective_used=perspective_used,
+            src_corners=perspective_transform.src.tolist(), dst_corners=perspective_transform.dst.tolist(),
             H=perspective_transform.H.tolist(), pad=perspective_transform.pad,
-            crop_origin=list(perspective_transform.crop_origin),
-            crop_x=perspective_transform.crop_window[0], crop_y=perspective_transform.crop_window[1],
-            crop_width=perspective_transform.crop_window[2], crop_height=perspective_transform.crop_window[3],
-            crop_recall=crop_recall,
-        ),candidate_masks,dx,dy,jac,mm)
-        if val.passed:
-            break
-    assert best is not None
-    warped,val,attempt_info,candidate_masks,dx,dy,jac,mm=best
-    # Image-only degradation, with protected markers and a guaranteed dark core.
-    out=warped.copy()
-    out=np.clip(out.astype(np.float32)+generate_paper_texture(out.shape[:2],base_rng,p["texture"])[...,None],0,255).astype(np.uint8)
-    out=apply_wall_texture(out,candidate_masks,base_rng,p["texture"],mm)
-    out=apply_illumination(out,base_rng,p["illumination"],mm)
-    out,distractors=add_safe_distractors(out,candidate_masks,wall_width,base_rng,p["distractors"],mm)
-    out=apply_optical_degradation(out,base_rng,p["blur"],mm)
-    out=apply_resampling(out,base_rng,p["resample"])
-    # Structural guardrail: preserve a continuous dark core and original marker colors.
-    ink_color=np.median(warped[candidate_masks["wall_core"]>0],axis=0) if np.any(candidate_masks["wall_core"]>0) else np.array([30,38,55])
-    out[candidate_masks["wall_core"]>0]=np.minimum(out[candidate_masks["wall_core"]>0], np.clip(ink_color,15,90).astype(np.uint8))
-    out[mm>0]=warped[mm>0]
+            crop_origin=list(perspective_transform.crop_origin), crop_x=perspective_transform.crop_window[0],
+            crop_y=perspective_transform.crop_window[1], crop_width=perspective_transform.crop_window[2],
+            crop_height=perspective_transform.crop_window[3], crop_recall=crop_recall)
+        reasons=validation_failure_reasons(val)
+        attempt_result=AttemptResult(attempt, scale, amp*scale, perspective_used, jmin, val, reasons, metadata)
+        attempts.append(attempt_result)
+        last_payload=(warped,val,metadata,candidate_masks,dx,dy,jac,mm)
+        if val.passed and not reasons:
+            # Only structurally validated candidates reach visual degradation.
+            out=warped.copy()
+            out=np.clip(out.astype(np.float32)+generate_paper_texture(out.shape[:2],base_rng,p["texture"])[...,None],0,255).astype(np.uint8)
+            out=apply_wall_texture(out,candidate_masks,base_rng,p["texture"],mm)
+            out=apply_illumination(out,base_rng,p["illumination"],mm)
+            out,distractors=add_safe_distractors(out,candidate_masks,wall_width,base_rng,p["distractors"],mm)
+            out=apply_optical_degradation(out,base_rng,p["blur"],mm)
+            out=apply_resampling(out,base_rng,p["resample"])
+            ink_color=np.median(warped[candidate_masks["wall_core"]>0],axis=0) if np.any(candidate_masks["wall_core"]>0) else np.array([30,38,55])
+            out[candidate_masks["wall_core"]>0]=np.minimum(out[candidate_masks["wall_core"]>0], np.clip(ink_color,15,90).astype(np.uint8))
+            out[mm>0]=warped[mm>0]
+            if debug_dir is not None and save_success_debug:
+                debug_dir.mkdir(parents=True,exist_ok=True)
+                cv2.imwrite(str(debug_dir/f"displacement_{level}.png"),np.clip(np.dstack([_normalize_field(dx),_normalize_field(dy),np.zeros_like(dx)])*127.5+127.5,0,255).astype(np.uint8))
+                cv2.imwrite(str(debug_dir/f"jacobian_{level}.png"),cv2.normalize(jac,None,0,255,cv2.NORM_MINMAX).astype(np.uint8))
+                cv2.imwrite(str(debug_dir/f"wall_mask_{level}.png"),candidate_masks["wall_mask"]*255)
+                cv2.imwrite(str(debug_dir/f"wall_core_{level}.png"),candidate_masks["wall_core"]*255)
+                cv2.imwrite(str(debug_dir/f"corridor_core_{level}.png"),candidate_masks["corridor_core"]*255)
+                cv2.imwrite(str(debug_dir/f"distractors_{level}.png"),distractors*255)
+            metadata["wall_core_recall"]=val.wall_core_recall
+            return VariantResult(level, "PASS", out, val, attempts, [], candidate_masks)
+    reasons=[]
+    for item in attempts:
+        for reason in item.failure_reasons:
+            if reason not in reasons:
+                reasons.append(reason)
+    result=VariantResult(level, "FAIL", None, attempts[-1].validation if attempts else None, attempts, reasons, None)
     if debug_dir is not None:
-        debug_dir.mkdir(parents=True,exist_ok=True)
-        cv2.imwrite(str(debug_dir/f"displacement_{level}.png"),np.clip(np.dstack([_normalize_field(dx),_normalize_field(dy),np.zeros_like(dx)])*127.5+127.5,0,255).astype(np.uint8))
-        cv2.imwrite(str(debug_dir/f"jacobian_{level}.png"),cv2.normalize(jac,None,0,255,cv2.NORM_MINMAX).astype(np.uint8))
-        cv2.imwrite(str(debug_dir/f"wall_mask_{level}.png"),candidate_masks["wall_mask"]*255)
-        cv2.imwrite(str(debug_dir/f"wall_core_{level}.png"),candidate_masks["wall_core"]*255)
-        cv2.imwrite(str(debug_dir/f"corridor_core_{level}.png"),candidate_masks["corridor_core"]*255)
-        cv2.imwrite(str(debug_dir/f"distractors_{level}.png"),distractors*255)
-    attempt_info["wall_core_recall"]=val.wall_core_recall
-    return out,val,attempt_info,candidate_masks
+        _save_failed_variant_debug(debug_dir, level, attempts, reasons, last_payload)
+    return result
 
 
 def _parse_levels(raw: str) -> List[str]:
@@ -618,14 +678,34 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
     marker=detect_protected_markers(rgb); wall,otsu=extract_wall_mask(rgb,roi,marker); wall_width=estimate_wall_width(wall); masks=build_safety_masks(wall,wall_width)
     analysis=ImageAnalysis(w,h,rgb.shape[2],roi,otsu,wall_width,float((wall>0).mean()),float((cv2.cvtColor(rgb,cv2.COLOR_RGB2HSV)[...,1]>85).mean()),int(marker.sum()))
     _save_rgb(debug/"wall_mask_original.png",np.repeat((wall*255)[...,None],3,axis=2)); _save_rgb(debug/"wall_core_original.png",np.repeat((masks["wall_core"]*255)[...,None],3,axis=2)); _save_rgb(debug/"corridor_core_original.png",np.repeat((masks["corridor_core"]*255)[...,None],3,axis=2))
-    variants=[]; validations={}; attempts={}
+    variants=[]; validations={}; attempts={}; results={}; failed_levels=[]
     original_for_sheet=rgb.copy()
     for idx,level in enumerate(levels,1):
-        out,val,info,cm=generate_variant(rgb,wall,masks,marker,wall_width,level,args.seed+idx*7919,args.no_perspective,debug if args.debug else None)
-        png=args.output_dir/f"maze_{idx:02d}_{level}.png"; jpg=args.output_dir/f"maze_{idx:02d}_{level}.jpg"; _save_rgb(png,out); Image.fromarray(out).save(jpg,quality=LEVEL_PARAMS[level]["jpeg"],optimize=True,subsampling=0)
-        if args.debug: run_recovery_proxies(out,debug/"recovery"/level)
-        variants.append((level,out)); validations[level]=asdict(val); attempts[level]=info
-    if len(levels)==len(LEVELS): make_contact_sheet([("original",original_for_sheet)]+variants,args.output_dir/"contact_sheet.png")
+        result=generate_variant(rgb,wall,masks,marker,wall_width,level,args.seed+idx*7919,args.no_perspective,debug,save_success_debug=args.debug)
+        results[level]=result
+        validations[level]=asdict(result.validation) if result.validation is not None else None
+        attempts[level]=result.attempts[-1].metadata if result.attempts else {}
+        if result.status == "PASS" and result.image is not None and result.validation is not None and result.validation.passed:
+            out=result.image
+            png=args.output_dir/f"maze_{idx:02d}_{level}.png"; jpg=args.output_dir/f"maze_{idx:02d}_{level}.jpg"
+            _save_rgb(png,out); Image.fromarray(out).save(jpg,quality=LEVEL_PARAMS[level]["jpeg"],optimize=True,subsampling=0)
+            if args.debug: run_recovery_proxies(out,debug/"recovery"/level)
+            variants.append((level,out))
+        else:
+            # Remove only this run's publish targets, preventing stale files
+            # from making a failed variant look published after a rerun.
+            (args.output_dir/f"maze_{idx:02d}_{level}.png").unlink(missing_ok=True)
+            (args.output_dir/f"maze_{idx:02d}_{level}.jpg").unlink(missing_ok=True)
+            failed_levels.append(level)
+    if len(levels)==len(LEVELS):
+        contact_variants=[]
+        for level in levels:
+            result=results[level]
+            if result.status == "PASS" and result.image is not None:
+                contact_variants.append((level,result.image))
+            else:
+                contact_variants.append((f"{level} FAILED",np.full_like(original_for_sheet,235)))
+        make_contact_sheet([("original",original_for_sheet)]+contact_variants,args.output_dir/"contact_sheet.png")
     debug_items=[("original",rgb),("wall mask",wall*255),("wall core",masks["wall_core"]*255),("corridor core",masks["corridor_core"]*255)]
     if args.debug:
         for level,out in variants:
@@ -636,14 +716,28 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
                 pth=debug/f"{prefix}{level}.png"
                 if pth.exists(): debug_items.append((f"{level} {prefix[:-1]}",np.asarray(Image.open(pth).convert("L"))))
     make_debug_sheet(debug_items, args.output_dir/"debug_sheet.png")
-    valid_levels=[lv for lv in LEVELS if lv in validations and all(validations[lv][k] for k in ("jacobian","wall_components","free_space_components","euler","no_crop","wall_core_integrity"))]
-    recommended="medium" if "medium" in valid_levels else ("strong" if "strong" in valid_levels else (valid_levels[0] if valid_levels else levels[0]))
-    rec_rgb=dict(variants)[recommended]; raster=args.output_dir/"maze_recommended_A4.png"; make_a4_raster(rec_rgb,raster)
-    if args.pdf: make_image_only_pdf(raster,args.output_dir/"maze_recommended_A4.pdf")
-    config={"input":str(args.input.resolve()),"output_dir":str(args.output_dir.resolve()),"seed":args.seed,"roi":roi,"analysis":asdict(analysis),"input_mode":load_info["input_mode"],"had_alpha":load_info["had_alpha"],"background":load_info["background"],"levels":levels,"parameters":LEVEL_PARAMS,"no_perspective":args.no_perspective,"perspective_requested":not args.no_perspective,"validations":validations,"attempts":attempts,"recommended":recommended,"pdf_generated":bool(args.pdf)}
+    valid_levels=[lv for lv in levels if lv in results and results[lv].status == "PASS" and results[lv].image is not None and results[lv].validation is not None and results[lv].validation.passed]
+    recommended=("medium" if "medium" in valid_levels else ("strong" if "strong" in valid_levels else (valid_levels[0] if valid_levels else None)))
+    pdf_generated=False
+    if recommended is not None:
+        rec_rgb=dict(variants)[recommended]
+        raster=args.output_dir/"maze_recommended_A4.png"; make_a4_raster(rec_rgb,raster)
+        if args.pdf:
+            make_image_only_pdf(raster,args.output_dir/"maze_recommended_A4.pdf")
+            pdf_generated=True
+    else:
+        # A failed run must not leave a stale recommendation from an earlier run.
+        (args.output_dir/"maze_recommended_A4.png").unlink(missing_ok=True)
+        (args.output_dir/"maze_recommended_A4.pdf").unlink(missing_ok=True)
+    variant_records={level:{"status":result.status,"failure_reasons":result.failure_reasons,
+                            "validation":asdict(result.validation) if result.validation is not None else None,
+                            "attempts":[asdict(item) for item in result.attempts]}
+                     for level,result in results.items()}
+    run_status="FAIL" if not valid_levels else ("PARTIAL_SUCCESS" if failed_levels else "PASS")
+    config={"input":str(args.input.resolve()),"output_dir":str(args.output_dir.resolve()),"seed":args.seed,"roi":roi,"analysis":asdict(analysis),"input_mode":load_info["input_mode"],"had_alpha":load_info["had_alpha"],"background":load_info["background"],"levels":levels,"parameters":LEVEL_PARAMS,"no_perspective":args.no_perspective,"perspective_requested":not args.no_perspective,"status":run_status,"partial_success":bool(valid_levels and failed_levels),"valid_levels":valid_levels,"failed_levels":failed_levels,"validations":validations,"attempts":attempts,"variants":variant_records,"recommended":recommended,"pdf_generated":pdf_generated}
     (args.output_dir/"run_config.json").write_text(json.dumps(config,indent=2,ensure_ascii=False),encoding="utf-8")
-    print(json.dumps({"roi":roi,"estimated_wall_width_px":wall_width,"recommended":recommended,"validations":validations},ensure_ascii=False,indent=2))
-    return 0
+    print(json.dumps({"status":run_status,"roi":roi,"estimated_wall_width_px":wall_width,"recommended":recommended,"valid_levels":valid_levels,"failed_levels":failed_levels,"validations":validations},ensure_ascii=False,indent=2))
+    return 0 if valid_levels else 1
 
 
 if __name__=="__main__":
