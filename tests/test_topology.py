@@ -5,6 +5,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import degrade_maze as dm
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -13,7 +14,9 @@ from degrade_maze import (apply_elastic_warp, build_safety_masks, estimate_wall_
                           apply_perspective_transform, build_perspective_transform,
                           calculate_crop_recall, load_image, parse_background,
                           generate_displacement_field, validate_displacement_jacobian,
-                          validate_topology)
+                          validate_topology, ValidationResult, AttemptResult,
+                          VariantResult, MAX_VARIANT_ATTEMPTS, generate_variant,
+                          validation_failure_reasons)
 from skimage.measure import euler_number
 
 
@@ -26,6 +29,28 @@ def synthetic_maze():
     cv2.line(m, (190, 10), (190, 65), 1, 7)
     cv2.line(m, (190, 65), (90, 65), 1, 7)
     return m
+
+
+def passing_validation():
+    return ValidationResult(
+        jacobian=True, wall_components=True, free_space_components=True,
+        euler=True, no_crop=True, wall_core_integrity=True,
+        jacobian_min=0.95, original_wall_components=1,
+        candidate_wall_components=1, original_free_components=1,
+        candidate_free_components=1, original_euler=1, candidate_euler=1,
+        wall_core_recall=1.0, crop_recall=1.0)
+
+
+def failing_validation(**overrides):
+    values = dict(
+        jacobian=False, wall_components=False, free_space_components=False,
+        euler=False, no_crop=False, wall_core_integrity=False,
+        jacobian_min=0.2, original_wall_components=1,
+        candidate_wall_components=2, original_free_components=1,
+        candidate_free_components=2, original_euler=1, candidate_euler=2,
+        wall_core_recall=0.5, crop_recall=0.5)
+    values.update(overrides)
+    return ValidationResult(**values)
 
 
 def test_seed_determinism_and_dimensions():
@@ -163,3 +188,92 @@ def test_pdf_generated_and_outputs(tmp_path):
     no_perspective_data=json.loads((no_perspective/"run_config.json").read_text())
     assert no_perspective_data["perspective_requested"] is False
     assert all(info["perspective_used"] == 0 for info in no_perspective_data["attempts"].values())
+
+
+def test_generate_variant_fails_closed_after_max_attempts(tmp_path):
+    wall = synthetic_maze()
+    masks = build_safety_masks(wall, estimate_wall_width(wall))
+    rgb = np.full((*wall.shape, 3), 255, np.uint8)
+
+    def always_fail(*args, **kwargs):
+        return failing_validation()
+
+    result = generate_variant(rgb, wall, masks, np.zeros_like(wall), 7.0,
+                              "subtle", 423, debug_dir=tmp_path / "debug",
+                              validator=always_fail)
+    assert result.status == "FAIL"
+    assert result.image is None
+    assert len(result.attempts) == MAX_VARIANT_ATTEMPTS
+    assert result.failure_reasons == ["wall_components", "free_space_components", "euler", "no_crop", "wall_core_integrity"]
+    assert (tmp_path / "debug" / "failed" / "subtle" / "attempts.json").exists()
+    assert not list(tmp_path.glob("*.png"))
+    assert not list(tmp_path.glob("*.jpg"))
+
+
+def test_jacobian_failure_never_publishes(monkeypatch, tmp_path):
+    wall = synthetic_maze()
+    masks = build_safety_masks(wall, estimate_wall_width(wall))
+    rgb = np.full((*wall.shape, 3), 255, np.uint8)
+    monkeypatch.setattr(dm, "validate_displacement_jacobian",
+                        lambda dx, dy: (False, 0.1, np.zeros_like(dx)))
+    result = generate_variant(rgb, wall, masks, np.zeros_like(wall), 7.0,
+                              "low", 423, debug_dir=tmp_path / "debug")
+    assert result.status == "FAIL"
+    assert result.image is None
+    assert len(result.attempts) == MAX_VARIANT_ATTEMPTS
+    assert all(not attempt.validation.jacobian for attempt in result.attempts)
+    assert "jacobian" in result.failure_reasons
+
+
+def test_validation_failure_reasons_are_stable():
+    result = failing_validation(jacobian=True, wall_components=True,
+                                free_space_components=True, euler=True,
+                                no_crop=True)
+    assert validation_failure_reasons(result) == ["wall_core_integrity"]
+
+
+def test_partial_success_publishes_only_passes_and_pdf_uses_pass(tmp_path, monkeypatch):
+    src = Path(__file__).resolve().parents[1] / "maze-10x10-kids-1788448203980.png"
+    original = np.full((48, 64, 3), 245, np.uint8)
+    attempt = AttemptResult(1, 1.0, 1.0, 0.01, 0.95, passing_validation(), [], {"perspective_used": 0.01})
+
+    def fake_generate(*args, **kwargs):
+        level = args[5]
+        if level == "subtle":
+            return VariantResult(level, "PASS", original.copy(), passing_validation(), [attempt], [], {})
+        return VariantResult(level, "FAIL", None, failing_validation(), [attempt], ["euler"], None)
+
+    monkeypatch.setattr(dm, "generate_variant", fake_generate)
+    out = tmp_path / "partial"
+    assert dm.main([str(src), "--output-dir", str(out), "--levels", "subtle,low", "--pdf"]) == 0
+    config = json.loads((out / "run_config.json").read_text())
+    assert config["partial_success"] is True
+    assert config["variants"]["subtle"]["status"] == "PASS"
+    assert config["variants"]["low"]["status"] == "FAIL"
+    assert (out / "maze_01_subtle.png").exists()
+    assert (out / "maze_01_subtle.jpg").exists()
+    assert not (out / "maze_02_low.png").exists()
+    assert not (out / "maze_02_low.jpg").exists()
+    assert (out / "maze_recommended_A4.pdf").exists()
+
+
+def test_all_fail_returns_nonzero_and_does_not_make_recommendation(tmp_path, monkeypatch):
+    src = Path(__file__).resolve().parents[1] / "maze-10x10-kids-1788448203980.png"
+
+    def fake_generate(*args, **kwargs):
+        level = args[5]
+        attempt = AttemptResult(1, 1.0, 1.0, 0.01, 0.2, failing_validation(), ["jacobian"], {})
+        return VariantResult(level, "FAIL", None, attempt.validation, [attempt], ["jacobian"], None)
+
+    monkeypatch.setattr(dm, "generate_variant", fake_generate)
+    out = tmp_path / "failed"
+    assert dm.main([str(src), "--output-dir", str(out), "--levels", "subtle,low", "--pdf"]) == 1
+    config = json.loads((out / "run_config.json").read_text())
+    assert config["status"] == "FAIL"
+    assert config["partial_success"] is False
+    assert config["recommended"] is None
+    assert config["pdf_generated"] is False
+    assert not (out / "maze_recommended_A4.png").exists()
+    assert not (out / "maze_recommended_A4.pdf").exists()
+    assert not list(out.glob("maze_*.png"))
+    assert not list(out.glob("maze_*.jpg"))

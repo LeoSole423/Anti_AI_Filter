@@ -88,6 +88,16 @@
   },
   "no_perspective": false,
   "perspective_requested": true,
+  "status": "PASS",
+  "partial_success": false,
+  "valid_levels": [
+    "subtle",
+    "low",
+    "medium",
+    "strong",
+    "max_readable"
+  ],
+  "failed_levels": [],
   "validations": {
     "subtle": {
       "jacobian": true,
@@ -535,6 +545,2400 @@
       "crop_height": 2048,
       "crop_recall": 0.9968240131185534,
       "wall_core_recall": 0.989707531350623
+    }
+  },
+  "variants": {
+    "subtle": {
+      "status": "PASS",
+      "failure_reasons": [],
+      "validation": {
+        "jacobian": true,
+        "wall_components": true,
+        "free_space_components": true,
+        "euler": true,
+        "no_crop": true,
+        "wall_core_integrity": true,
+        "jacobian_min": 0.9660613536834717,
+        "original_wall_components": 45,
+        "candidate_wall_components": 45,
+        "original_free_components": 18,
+        "candidate_free_components": 18,
+        "original_euler": 29,
+        "candidate_euler": 29,
+        "wall_core_recall": 0.9915489625232751,
+        "crop_recall": 0.9999626942232005
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "scale": 1.0,
+          "amp_px": 1.92,
+          "perspective_used": 0.003,
+          "jacobian_min": 0.9660613536834717,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": true,
+            "euler": true,
+            "no_crop": true,
+            "wall_core_integrity": true,
+            "jacobian_min": 0.9660613536834717,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 18,
+            "original_euler": 29,
+            "candidate_euler": 29,
+            "wall_core_recall": 0.9915489625232751,
+            "crop_recall": 0.9999626942232005
+          },
+          "failure_reasons": [],
+          "metadata": {
+            "attempt": 1,
+            "scale": 1.0,
+            "amp_px": 1.92,
+            "jacobian_min": 0.9660613536834717,
+            "perspective_requested": true,
+            "perspective_used": 0.003,
+            "src_corners": [
+              [
+                16.0,
+                16.0
+              ],
+              [
+                2063.0,
+                16.0
+              ],
+              [
+                2063.0,
+                2063.0
+              ],
+              [
+                16.0,
+                2063.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                15.52188777923584,
+                15.476975440979004
+              ],
+              [
+                2057.406494140625,
+                11.650585174560547
+              ],
+              [
+                2063.68603515625,
+                2064.169189453125
+              ],
+              [
+                21.372867584228516,
+                2061.52587890625
+              ]
+            ],
+            "H": [
+              [
+                0.9943071603775024,
+                0.0028561546932905912,
+                -0.43313148617744446
+              ],
+              [
+                -0.0018871566280722618,
+                0.9993076324462891,
+                -0.482157438993454
+              ],
+              [
+                -1.5396867638628464e-06,
+                -9.777460974191854e-08,
+                1.0
+              ]
+            ],
+            "pad": 16,
+            "crop_origin": [
+              16,
+              14
+            ],
+            "crop_x": 16,
+            "crop_y": 14,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.9999626942232005,
+            "wall_core_recall": 0.9915489625232751
+          }
+        }
+      ]
+    },
+    "low": {
+      "status": "PASS",
+      "failure_reasons": [],
+      "validation": {
+        "jacobian": true,
+        "wall_components": true,
+        "free_space_components": true,
+        "euler": true,
+        "no_crop": true,
+        "wall_core_integrity": true,
+        "jacobian_min": 0.9918010830879211,
+        "original_wall_components": 45,
+        "candidate_wall_components": 45,
+        "original_free_components": 18,
+        "candidate_free_components": 18,
+        "original_euler": 29,
+        "candidate_euler": 29,
+        "wall_core_recall": 0.9996913802503935,
+        "crop_recall": 1.0
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "scale": 1.0,
+          "amp_px": 3.68,
+          "perspective_used": 0.005,
+          "jacobian_min": 0.9375485181808472,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": false,
+            "euler": true,
+            "no_crop": true,
+            "wall_core_integrity": false,
+            "jacobian_min": 0.9375485181808472,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 19,
+            "original_euler": 29,
+            "candidate_euler": 29,
+            "wall_core_recall": 0.978067423127964,
+            "crop_recall": 0.9962364407098379
+          },
+          "failure_reasons": [
+            "free_space_components",
+            "wall_core_integrity"
+          ],
+          "metadata": {
+            "attempt": 1,
+            "scale": 1.0,
+            "amp_px": 3.68,
+            "jacobian_min": 0.9375485181808472,
+            "perspective_requested": true,
+            "perspective_used": 0.005,
+            "src_corners": [
+              [
+                24.0,
+                24.0
+              ],
+              [
+                2071.0,
+                24.0
+              ],
+              [
+                2071.0,
+                2071.0
+              ],
+              [
+                24.0,
+                2071.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                24.647066116333008,
+                33.406349182128906
+              ],
+              [
+                2073.83642578125,
+                17.94784164428711
+              ],
+              [
+                2062.412109375,
+                2061.16650390625
+              ],
+              [
+                22.714927673339844,
+                2062.799560546875
+              ]
+            ],
+            "H": [
+              [
+                0.9941930174827576,
+                -0.0008926448062993586,
+                0.8072361946105957
+              ],
+              [
+                -0.007610890548676252,
+                0.9960251450538635,
+                9.683566093444824
+              ],
+              [
+                -3.3036865261237836e-06,
+                2.2548729248228483e-06,
+                1.0
+              ]
+            ],
+            "pad": 24,
+            "crop_origin": [
+              25,
+              17
+            ],
+            "crop_x": 25,
+            "crop_y": 17,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.9962364407098379
+          }
+        },
+        {
+          "attempt": 2,
+          "scale": 0.65,
+          "amp_px": 2.3920000000000003,
+          "perspective_used": 0.0032500000000000003,
+          "jacobian_min": 0.9570559859275818,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": false,
+            "euler": true,
+            "no_crop": true,
+            "wall_core_integrity": true,
+            "jacobian_min": 0.9570559859275818,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 20,
+            "original_euler": 29,
+            "candidate_euler": 29,
+            "wall_core_recall": 0.9868836606417233,
+            "crop_recall": 0.9964544383356873
+          },
+          "failure_reasons": [
+            "free_space_components"
+          ],
+          "metadata": {
+            "attempt": 2,
+            "scale": 0.65,
+            "amp_px": 2.3920000000000003,
+            "jacobian_min": 0.9570559859275818,
+            "perspective_requested": true,
+            "perspective_used": 0.0032500000000000003,
+            "src_corners": [
+              [
+                17.0,
+                17.0
+              ],
+              [
+                2064.0,
+                17.0
+              ],
+              [
+                2064.0,
+                2064.0
+              ],
+              [
+                17.0,
+                2064.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                12.356986999511719,
+                11.329452514648438
+              ],
+              [
+                2060.490478515625,
+                22.814647674560547
+              ],
+              [
+                2063.5947265625,
+                2058.254638671875
+              ],
+              [
+                15.535531997680664,
+                2069.49658203125
+              ]
+            ],
+            "H": [
+              [
+                1.0118871927261353,
+                0.0015530732925981283,
+                -4.8703484535217285
+              ],
+              [
+                0.0057357256300747395,
+                1.0055683851242065,
+                -5.861664295196533
+              ],
+              [
+                5.455230621009832e-06,
+                9.455273897174266e-09,
+                1.0
+              ]
+            ],
+            "pad": 17,
+            "crop_origin": [
+              14,
+              17
+            ],
+            "crop_x": 14,
+            "crop_y": 17,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.9964544383356873
+          }
+        },
+        {
+          "attempt": 3,
+          "scale": 0.42250000000000004,
+          "amp_px": 1.5548000000000002,
+          "perspective_used": 0.0021125000000000002,
+          "jacobian_min": 0.9729342460632324,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": false,
+            "euler": true,
+            "no_crop": false,
+            "wall_core_integrity": false,
+            "jacobian_min": 0.9729342460632324,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 19,
+            "original_euler": 29,
+            "candidate_euler": 29,
+            "wall_core_recall": 0.9809375867993045,
+            "crop_recall": 0.9906914681960707
+          },
+          "failure_reasons": [
+            "free_space_components",
+            "no_crop",
+            "wall_core_integrity"
+          ],
+          "metadata": {
+            "attempt": 3,
+            "scale": 0.42250000000000004,
+            "amp_px": 1.5548000000000002,
+            "jacobian_min": 0.9729342460632324,
+            "perspective_requested": true,
+            "perspective_used": 0.0021125000000000002,
+            "src_corners": [
+              [
+                16.0,
+                16.0
+              ],
+              [
+                2063.0,
+                16.0
+              ],
+              [
+                2063.0,
+                2063.0
+              ],
+              [
+                16.0,
+                2063.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                15.67908763885498,
+                12.151410102844238
+              ],
+              [
+                2065.981201171875,
+                14.161857604980469
+              ],
+              [
+                2061.789794921875,
+                2061.960205078125
+              ],
+              [
+                12.935653686523438,
+                2062.751220703125
+              ]
+            ],
+            "H": [
+              [
+                1.0030103921890259,
+                -0.0013357597636058927,
+                -0.3474525511264801
+              ],
+              [
+                0.0009916259441524744,
+                1.0024898052215576,
+                -3.9040961265563965
+              ],
+              [
+                6.684576874249615e-07,
+                3.4662116377148777e-07,
+                1.0
+              ]
+            ],
+            "pad": 16,
+            "crop_origin": [
+              16,
+              14
+            ],
+            "crop_x": 16,
+            "crop_y": 14,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.9906914681960707
+          }
+        },
+        {
+          "attempt": 4,
+          "scale": 0.274625,
+          "amp_px": 1.01062,
+          "perspective_used": 0.001373125,
+          "jacobian_min": 0.9811668395996094,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": false,
+            "euler": true,
+            "no_crop": true,
+            "wall_core_integrity": true,
+            "jacobian_min": 0.9811668395996094,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 20,
+            "original_euler": 29,
+            "candidate_euler": 29,
+            "wall_core_recall": 0.9966463320542759,
+            "crop_recall": 0.9993731706410127
+          },
+          "failure_reasons": [
+            "free_space_components"
+          ],
+          "metadata": {
+            "attempt": 4,
+            "scale": 0.274625,
+            "amp_px": 1.01062,
+            "jacobian_min": 0.9811668395996094,
+            "perspective_requested": true,
+            "perspective_used": 0.001373125,
+            "src_corners": [
+              [
+                16.0,
+                16.0
+              ],
+              [
+                2063.0,
+                16.0
+              ],
+              [
+                2063.0,
+                2063.0
+              ],
+              [
+                16.0,
+                2063.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                18.534658432006836,
+                13.953352928161621
+              ],
+              [
+                2063.25439453125,
+                18.803565979003906
+              ],
+              [
+                2064.34765625,
+                2064.086181640625
+              ],
+              [
+                15.929328918457031,
+                2063.876220703125
+              ]
+            ],
+            "H": [
+              [
+                1.0011765956878662,
+                -0.0012868198100477457,
+                2.5364885330200195
+              ],
+              [
+                0.0023902759421616793,
+                0.9996098279953003,
+                -2.0785977840423584
+              ],
+              [
+                1.10842802314437e-06,
+                -8.826581847642956e-07,
+                1.0
+              ]
+            ],
+            "pad": 16,
+            "crop_origin": [
+              17,
+              16
+            ],
+            "crop_x": 17,
+            "crop_y": 16,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.9993731706410127
+          }
+        },
+        {
+          "attempt": 5,
+          "scale": 0.17850625000000003,
+          "amp_px": 0.6569030000000001,
+          "perspective_used": 0.0008925312500000002,
+          "jacobian_min": 0.9889279007911682,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": false,
+            "euler": true,
+            "no_crop": true,
+            "wall_core_integrity": true,
+            "jacobian_min": 0.9889279007911682,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 17,
+            "original_euler": 29,
+            "candidate_euler": 29,
+            "wall_core_recall": 0.9984003209645396,
+            "crop_recall": 1.0
+          },
+          "failure_reasons": [
+            "free_space_components"
+          ],
+          "metadata": {
+            "attempt": 5,
+            "scale": 0.17850625000000003,
+            "amp_px": 0.6569030000000001,
+            "jacobian_min": 0.9889279007911682,
+            "perspective_requested": true,
+            "perspective_used": 0.0008925312500000002,
+            "src_corners": [
+              [
+                16.0,
+                16.0
+              ],
+              [
+                2063.0,
+                16.0
+              ],
+              [
+                2063.0,
+                2063.0
+              ],
+              [
+                16.0,
+                2063.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                17.243131637573242,
+                15.425006866455078
+              ],
+              [
+                2061.65478515625,
+                17.54463768005371
+              ],
+              [
+                2062.94677734375,
+                2064.43994140625
+              ],
+              [
+                17.822954177856445,
+                2061.927490234375
+              ]
+            ],
+            "H": [
+              [
+                0.9985384941101074,
+                0.00028022268088534474,
+                1.2619597911834717
+              ],
+              [
+                0.001033836044371128,
+                0.9994021058082581,
+                -0.5820330381393433
+              ],
+              [
+                -9.354287300311626e-08,
+                -1.7005653774049279e-07,
+                1.0
+              ]
+            ],
+            "pad": 16,
+            "crop_origin": [
+              17,
+              16
+            ],
+            "crop_x": 17,
+            "crop_y": 16,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 1.0
+          }
+        },
+        {
+          "attempt": 6,
+          "scale": 0.11602906250000002,
+          "amp_px": 0.4269869500000001,
+          "perspective_used": 0.0005801453125000001,
+          "jacobian_min": 0.9918010830879211,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": true,
+            "euler": true,
+            "no_crop": true,
+            "wall_core_integrity": true,
+            "jacobian_min": 0.9918010830879211,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 18,
+            "original_euler": 29,
+            "candidate_euler": 29,
+            "wall_core_recall": 0.9996913802503935,
+            "crop_recall": 1.0
+          },
+          "failure_reasons": [],
+          "metadata": {
+            "attempt": 6,
+            "scale": 0.11602906250000002,
+            "amp_px": 0.4269869500000001,
+            "jacobian_min": 0.9918010830879211,
+            "perspective_requested": true,
+            "perspective_used": 0.0005801453125000001,
+            "src_corners": [
+              [
+                16.0,
+                16.0
+              ],
+              [
+                2063.0,
+                16.0
+              ],
+              [
+                2063.0,
+                2063.0
+              ],
+              [
+                16.0,
+                2063.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                15.721454620361328,
+                15.005087852478027
+              ],
+              [
+                2063.422119140625,
+                17.15683937072754
+              ],
+              [
+                2062.71728515625,
+                2062.160400390625
+              ],
+              [
+                16.854963302612305,
+                2062.141357421875
+              ]
+            ],
+            "H": [
+              [
+                1.0014086961746216,
+                0.0005611516535282135,
+                -0.3098249137401581
+              ],
+              [
+                0.0010599300730973482,
+                1.0009872913360596,
+                -1.0274406671524048
+              ],
+              [
+                5.094747734801786e-07,
+                4.3914948832934897e-07,
+                1.0
+              ]
+            ],
+            "pad": 16,
+            "crop_origin": [
+              16,
+              15
+            ],
+            "crop_x": 16,
+            "crop_y": 15,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 1.0,
+            "wall_core_recall": 0.9996913802503935
+          }
+        }
+      ]
+    },
+    "medium": {
+      "status": "PASS",
+      "failure_reasons": [],
+      "validation": {
+        "jacobian": true,
+        "wall_components": true,
+        "free_space_components": true,
+        "euler": true,
+        "no_crop": true,
+        "wall_core_integrity": true,
+        "jacobian_min": 0.9822869300842285,
+        "original_wall_components": 45,
+        "candidate_wall_components": 45,
+        "original_free_components": 18,
+        "candidate_free_components": 18,
+        "original_euler": 29,
+        "candidate_euler": 29,
+        "wall_core_recall": 0.9970989743536988,
+        "crop_recall": 1.0
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "scale": 1.0,
+          "amp_px": 5.44,
+          "perspective_used": 0.008,
+          "jacobian_min": 0.8977512717247009,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": false,
+            "euler": false,
+            "no_crop": false,
+            "wall_core_integrity": false,
+            "jacobian_min": 0.8977512717247009,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 19,
+            "original_euler": 29,
+            "candidate_euler": 28,
+            "wall_core_recall": 0.9766220539673068,
+            "crop_recall": 0.9946481041928068
+          },
+          "failure_reasons": [
+            "free_space_components",
+            "euler",
+            "no_crop",
+            "wall_core_integrity"
+          ],
+          "metadata": {
+            "attempt": 1,
+            "scale": 1.0,
+            "amp_px": 5.44,
+            "jacobian_min": 0.8977512717247009,
+            "perspective_requested": true,
+            "perspective_used": 0.008,
+            "src_corners": [
+              [
+                36.0,
+                36.0
+              ],
+              [
+                2083.0,
+                36.0
+              ],
+              [
+                2083.0,
+                2083.0
+              ],
+              [
+                36.0,
+                2083.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                49.26393508911133,
+                26.743412017822266
+              ],
+              [
+                2083.352783203125,
+                29.991615295410156
+              ],
+              [
+                2095.485595703125,
+                2084.887939453125
+              ],
+              [
+                40.1133918762207,
+                2098.95263671875
+              ]
+            ],
+            "H": [
+              [
+                1.0021588802337646,
+                -0.00467393733561039,
+                13.352702140808105
+              ],
+              [
+                0.0017091482877731323,
+                1.0016107559204102,
+                -9.377067565917969
+              ],
+              [
+                4.080938197148498e-06,
+                -5.082523784949444e-06,
+                1.0
+              ]
+            ],
+            "pad": 36,
+            "crop_origin": [
+              44,
+              39
+            ],
+            "crop_x": 44,
+            "crop_y": 39,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.9946481041928068
+          }
+        },
+        {
+          "attempt": 2,
+          "scale": 0.65,
+          "amp_px": 3.5360000000000005,
+          "perspective_used": 0.005200000000000001,
+          "jacobian_min": 0.9380529522895813,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": false,
+            "euler": true,
+            "no_crop": true,
+            "wall_core_integrity": false,
+            "jacobian_min": 0.9380529522895813,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 17,
+            "original_euler": 29,
+            "candidate_euler": 29,
+            "wall_core_recall": 0.9808089952369685,
+            "crop_recall": 1.0
+          },
+          "failure_reasons": [
+            "free_space_components",
+            "wall_core_integrity"
+          ],
+          "metadata": {
+            "attempt": 2,
+            "scale": 0.65,
+            "amp_px": 3.5360000000000005,
+            "jacobian_min": 0.9380529522895813,
+            "perspective_requested": true,
+            "perspective_used": 0.005200000000000001,
+            "src_corners": [
+              [
+                25.0,
+                25.0
+              ],
+              [
+                2072.0,
+                25.0
+              ],
+              [
+                2072.0,
+                2072.0
+              ],
+              [
+                25.0,
+                2072.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                35.02737045288086,
+                17.610986709594727
+              ],
+              [
+                2068.051513671875,
+                34.299991607666016
+              ],
+              [
+                2061.661865234375,
+                2081.165283203125
+              ],
+              [
+                30.559635162353516,
+                2078.138671875
+              ]
+            ],
+            "H": [
+              [
+                1.0000078678131104,
+                -0.002168339677155018,
+                10.084651947021484
+              ],
+              [
+                0.008265500888228416,
+                1.0076844692230225,
+                -7.786120414733887
+              ],
+              [
+                3.260371840951848e-06,
+                4.7255733193196647e-07,
+                1.0
+              ]
+            ],
+            "pad": 25,
+            "crop_origin": [
+              26,
+              26
+            ],
+            "crop_x": 26,
+            "crop_y": 26,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 1.0
+          }
+        },
+        {
+          "attempt": 3,
+          "scale": 0.42250000000000004,
+          "amp_px": 2.2984000000000004,
+          "perspective_used": 0.00338,
+          "jacobian_min": 0.9599432349205017,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": false,
+            "euler": true,
+            "no_crop": true,
+            "wall_core_integrity": false,
+            "jacobian_min": 0.9599432349205017,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 19,
+            "original_euler": 29,
+            "candidate_euler": 29,
+            "wall_core_recall": 0.9821257728352897,
+            "crop_recall": 0.9962800198398942
+          },
+          "failure_reasons": [
+            "free_space_components",
+            "wall_core_integrity"
+          ],
+          "metadata": {
+            "attempt": 3,
+            "scale": 0.42250000000000004,
+            "amp_px": 2.2984000000000004,
+            "jacobian_min": 0.9599432349205017,
+            "perspective_requested": true,
+            "perspective_used": 0.00338,
+            "src_corners": [
+              [
+                17.0,
+                17.0
+              ],
+              [
+                2064.0,
+                17.0
+              ],
+              [
+                2064.0,
+                2064.0
+              ],
+              [
+                17.0,
+                2064.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                20.74837303161621,
+                16.53681755065918
+              ],
+              [
+                2060.435302734375,
+                14.152857780456543
+              ],
+              [
+                2069.222900390625,
+                2063.876220703125
+              ],
+              [
+                17.50165367126465,
+                2058.144287109375
+              ]
+            ],
+            "H": [
+              [
+                0.9923776984214783,
+                -0.0016359584406018257,
+                3.90407657623291
+              ],
+              [
+                -0.0011917774099856615,
+                0.9914045929908752,
+                -0.29814499616622925
+              ],
+              [
+                -1.9261510715296026e-06,
+                -2.8569172627612716e-06,
+                1.0
+              ]
+            ],
+            "pad": 17,
+            "crop_origin": [
+              20,
+              16
+            ],
+            "crop_x": 20,
+            "crop_y": 16,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.9962800198398942
+          }
+        },
+        {
+          "attempt": 4,
+          "scale": 0.274625,
+          "amp_px": 1.4939600000000002,
+          "perspective_used": 0.002197,
+          "jacobian_min": 0.971853494644165,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": true,
+            "euler": true,
+            "no_crop": false,
+            "wall_core_integrity": false,
+            "jacobian_min": 0.971853494644165,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 18,
+            "original_euler": 29,
+            "candidate_euler": 29,
+            "wall_core_recall": 0.954108243233512,
+            "crop_recall": 0.9777381325874602
+          },
+          "failure_reasons": [
+            "no_crop",
+            "wall_core_integrity"
+          ],
+          "metadata": {
+            "attempt": 4,
+            "scale": 0.274625,
+            "amp_px": 1.4939600000000002,
+            "jacobian_min": 0.971853494644165,
+            "perspective_requested": true,
+            "perspective_used": 0.002197,
+            "src_corners": [
+              [
+                16.0,
+                16.0
+              ],
+              [
+                2063.0,
+                16.0
+              ],
+              [
+                2063.0,
+                2063.0
+              ],
+              [
+                16.0,
+                2063.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                17.47812271118164,
+                18.830013275146484
+              ],
+              [
+                2067.016357421875,
+                19.427654266357422
+              ],
+              [
+                2066.600341796875,
+                2066.33642578125
+              ],
+              [
+                12.219160079956055,
+                2063.0712890625
+              ]
+            ],
+            "H": [
+              [
+                0.9998992681503296,
+                -0.002583106979727745,
+                1.5205645561218262
+              ],
+              [
+                0.0002796189219225198,
+                0.9962477087974548,
+                2.885038137435913
+              ],
+              [
+                -6.347750627355708e-07,
+                -1.1517199709487613e-06,
+                1.0
+              ]
+            ],
+            "pad": 16,
+            "crop_origin": [
+              16,
+              19
+            ],
+            "crop_x": 16,
+            "crop_y": 19,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.9777381325874602
+          }
+        },
+        {
+          "attempt": 5,
+          "scale": 0.17850625000000003,
+          "amp_px": 0.9710740000000002,
+          "perspective_used": 0.0014280500000000004,
+          "jacobian_min": 0.9822869300842285,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": true,
+            "euler": true,
+            "no_crop": true,
+            "wall_core_integrity": true,
+            "jacobian_min": 0.9822869300842285,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 18,
+            "original_euler": 29,
+            "candidate_euler": 29,
+            "wall_core_recall": 0.9970989743536988,
+            "crop_recall": 1.0
+          },
+          "failure_reasons": [],
+          "metadata": {
+            "attempt": 5,
+            "scale": 0.17850625000000003,
+            "amp_px": 0.9710740000000002,
+            "jacobian_min": 0.9822869300842285,
+            "perspective_requested": true,
+            "perspective_used": 0.0014280500000000004,
+            "src_corners": [
+              [
+                16.0,
+                16.0
+              ],
+              [
+                2063.0,
+                16.0
+              ],
+              [
+                2063.0,
+                2063.0
+              ],
+              [
+                16.0,
+                2063.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                15.684697151184082,
+                18.716642379760742
+              ],
+              [
+                2061.71826171875,
+                18.533050537109375
+              ],
+              [
+                2061.957763671875,
+                2061.239501953125
+              ],
+              [
+                15.626972198486328,
+                2061.21728515625
+              ]
+            ],
+            "H": [
+              [
+                0.9994244575500488,
+                -2.930847585957963e-05,
+                -0.30565574765205383
+              ],
+              [
+                -9.060025331564248e-05,
+                0.9976537823677063,
+                2.7555949687957764
+              ],
+              [
+                -4.921893648202058e-08,
+                -7.095096776765786e-08,
+                1.0
+              ]
+            ],
+            "pad": 16,
+            "crop_origin": [
+              15,
+              16
+            ],
+            "crop_x": 15,
+            "crop_y": 16,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 1.0,
+            "wall_core_recall": 0.9970989743536988
+          }
+        }
+      ]
+    },
+    "strong": {
+      "status": "PASS",
+      "failure_reasons": [],
+      "validation": {
+        "jacobian": true,
+        "wall_components": true,
+        "free_space_components": true,
+        "euler": true,
+        "no_crop": true,
+        "wall_core_integrity": true,
+        "jacobian_min": 0.9848732948303223,
+        "original_wall_components": 45,
+        "candidate_wall_components": 45,
+        "original_free_components": 18,
+        "candidate_free_components": 18,
+        "original_euler": 29,
+        "candidate_euler": 29,
+        "wall_core_recall": 0.9928040161716749,
+        "crop_recall": 0.9967712813976953
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "scale": 1.0,
+          "amp_px": 7.36,
+          "perspective_used": 0.011,
+          "jacobian_min": 0.8780449032783508,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": false,
+            "euler": false,
+            "no_crop": false,
+            "wall_core_integrity": false,
+            "jacobian_min": 0.8780449032783508,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 19,
+            "original_euler": 29,
+            "candidate_euler": 26,
+            "wall_core_recall": 0.9708611519746521,
+            "crop_recall": 0.9948370191354485
+          },
+          "failure_reasons": [
+            "free_space_components",
+            "euler",
+            "no_crop",
+            "wall_core_integrity"
+          ],
+          "metadata": {
+            "attempt": 1,
+            "scale": 1.0,
+            "amp_px": 7.36,
+            "jacobian_min": 0.8780449032783508,
+            "perspective_requested": true,
+            "perspective_used": 0.011,
+            "src_corners": [
+              [
+                49.0,
+                49.0
+              ],
+              [
+                2096.0,
+                49.0
+              ],
+              [
+                2096.0,
+                2096.0
+              ],
+              [
+                49.0,
+                2096.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                70.50657653808594,
+                35.6787109375
+              ],
+              [
+                2115.21484375,
+                33.241668701171875
+              ],
+              [
+                2111.104736328125,
+                2073.876708984375
+              ],
+              [
+                62.097747802734375,
+                2080.3359375
+              ]
+            ],
+            "H": [
+              [
+                1.0009071826934814,
+                -0.00417139008641243,
+                21.666301727294922
+              ],
+              [
+                -0.0011586392065510154,
+                0.9967243075370789,
+                -13.104117393493652
+              ],
+              [
+                9.59654244070407e-07,
+                -1.022963601826632e-06,
+                1.0
+              ]
+            ],
+            "pad": 49,
+            "crop_origin": [
+              65,
+              33
+            ],
+            "crop_x": 65,
+            "crop_y": 33,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.9948370191354485
+          }
+        },
+        {
+          "attempt": 2,
+          "scale": 0.65,
+          "amp_px": 4.784000000000001,
+          "perspective_used": 0.00715,
+          "jacobian_min": 0.9178610444068909,
+          "validation": {
+            "jacobian": true,
+            "wall_components": false,
+            "free_space_components": false,
+            "euler": false,
+            "no_crop": false,
+            "wall_core_integrity": false,
+            "jacobian_min": 0.9178610444068909,
+            "original_wall_components": 45,
+            "candidate_wall_components": 46,
+            "original_free_components": 18,
+            "candidate_free_components": 19,
+            "original_euler": 29,
+            "candidate_euler": 31,
+            "wall_core_recall": 0.956890964642464,
+            "crop_recall": 0.976973701782595
+          },
+          "failure_reasons": [
+            "wall_components",
+            "free_space_components",
+            "euler",
+            "no_crop",
+            "wall_core_integrity"
+          ],
+          "metadata": {
+            "attempt": 2,
+            "scale": 0.65,
+            "amp_px": 4.784000000000001,
+            "jacobian_min": 0.9178610444068909,
+            "perspective_requested": true,
+            "perspective_used": 0.00715,
+            "src_corners": [
+              [
+                33.0,
+                33.0
+              ],
+              [
+                2080.0,
+                33.0
+              ],
+              [
+                2080.0,
+                2080.0
+              ],
+              [
+                33.0,
+                2080.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                20.43631935119629,
+                32.730953216552734
+              ],
+              [
+                2092.8896484375,
+                42.34376525878906
+              ],
+              [
+                2070.6767578125,
+                2074.59716796875
+              ],
+              [
+                38.6595458984375,
+                2088.547119140625
+              ]
+            ],
+            "H": [
+              [
+                1.024954080581665,
+                0.009285404346883297,
+                -13.68311595916748
+              ],
+              [
+                0.00494126183912158,
+                1.0252660512924194,
+                -1.249121069908142
+              ],
+              [
+                5.734190835937625e-06,
+                9.788960596779361e-06,
+                1.0
+              ]
+            ],
+            "pad": 33,
+            "crop_origin": [
+              33,
+              37
+            ],
+            "crop_x": 33,
+            "crop_y": 37,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.976973701782595
+          }
+        },
+        {
+          "attempt": 3,
+          "scale": 0.42250000000000004,
+          "amp_px": 3.1096000000000004,
+          "perspective_used": 0.004647500000000001,
+          "jacobian_min": 0.9373810291290283,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": true,
+            "euler": true,
+            "no_crop": false,
+            "wall_core_integrity": false,
+            "jacobian_min": 0.9373810291290283,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 18,
+            "original_euler": 29,
+            "candidate_euler": 29,
+            "wall_core_recall": 0.9625387060602631,
+            "crop_recall": 0.9838612155096409
+          },
+          "failure_reasons": [
+            "no_crop",
+            "wall_core_integrity"
+          ],
+          "metadata": {
+            "attempt": 3,
+            "scale": 0.42250000000000004,
+            "amp_px": 3.1096000000000004,
+            "jacobian_min": 0.9373810291290283,
+            "perspective_requested": true,
+            "perspective_used": 0.004647500000000001,
+            "src_corners": [
+              [
+                23.0,
+                23.0
+              ],
+              [
+                2070.0,
+                23.0
+              ],
+              [
+                2070.0,
+                2070.0
+              ],
+              [
+                23.0,
+                2070.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                32.338077545166016,
+                29.406036376953125
+              ],
+              [
+                2068.18017578125,
+                31.685178756713867
+              ],
+              [
+                2071.319580078125,
+                2078.685302734375
+              ],
+              [
+                14.58729362487793,
+                2075.161865234375
+              ]
+            ],
+            "H": [
+              [
+                0.9938326478004456,
+                -0.008742927573621273,
+                9.677109718322754
+              ],
+              [
+                0.0011041343677788973,
+                0.9889769554138184,
+                6.63062047958374
+              ],
+              [
+                -2.883782030949078e-07,
+                -4.960846581525402e-06,
+                1.0
+              ]
+            ],
+            "pad": 23,
+            "crop_origin": [
+              19,
+              31
+            ],
+            "crop_x": 19,
+            "crop_y": 31,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.9838612155096409
+          }
+        },
+        {
+          "attempt": 4,
+          "scale": 0.274625,
+          "amp_px": 2.02124,
+          "perspective_used": 0.003020875,
+          "jacobian_min": 0.9667232632637024,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": true,
+            "euler": true,
+            "no_crop": false,
+            "wall_core_integrity": false,
+            "jacobian_min": 0.9667232632637024,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 18,
+            "original_euler": 29,
+            "candidate_euler": 29,
+            "wall_core_recall": 0.9622609482856173,
+            "crop_recall": 0.9816199004975125
+          },
+          "failure_reasons": [
+            "no_crop",
+            "wall_core_integrity"
+          ],
+          "metadata": {
+            "attempt": 4,
+            "scale": 0.274625,
+            "amp_px": 2.02124,
+            "jacobian_min": 0.9667232632637024,
+            "perspective_requested": true,
+            "perspective_used": 0.003020875,
+            "src_corners": [
+              [
+                16.0,
+                16.0
+              ],
+              [
+                2063.0,
+                16.0
+              ],
+              [
+                2063.0,
+                2063.0
+              ],
+              [
+                16.0,
+                2063.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                11.509965896606445,
+                12.84792709350586
+              ],
+              [
+                2062.721923828125,
+                12.01002311706543
+              ],
+              [
+                2065.947265625,
+                2058.064208984375
+              ],
+              [
+                12.47441291809082,
+                2064.72216796875
+              ]
+            ],
+            "H": [
+              [
+                1.0049339532852173,
+                0.0004644209984689951,
+                -4.5762529373168945
+              ],
+              [
+                -0.0003926698991563171,
+                1.0012797117233276,
+                -3.166091203689575
+              ],
+              [
+                1.3878689060220495e-06,
+                -5.400523832577164e-07,
+                1.0
+              ]
+            ],
+            "pad": 16,
+            "crop_origin": [
+              15,
+              15
+            ],
+            "crop_x": 15,
+            "crop_y": 15,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.9816199004975125
+          }
+        },
+        {
+          "attempt": 5,
+          "scale": 0.17850625000000003,
+          "amp_px": 1.3138060000000003,
+          "perspective_used": 0.00196356875,
+          "jacobian_min": 0.9811023473739624,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": false,
+            "euler": true,
+            "no_crop": true,
+            "wall_core_integrity": true,
+            "jacobian_min": 0.9811023473739624,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 20,
+            "original_euler": 29,
+            "candidate_euler": 29,
+            "wall_core_recall": 0.9909522976740358,
+            "crop_recall": 0.9973058582291005
+          },
+          "failure_reasons": [
+            "free_space_components"
+          ],
+          "metadata": {
+            "attempt": 5,
+            "scale": 0.17850625000000003,
+            "amp_px": 1.3138060000000003,
+            "jacobian_min": 0.9811023473739624,
+            "perspective_requested": true,
+            "perspective_used": 0.00196356875,
+            "src_corners": [
+              [
+                16.0,
+                16.0
+              ],
+              [
+                2063.0,
+                16.0
+              ],
+              [
+                2063.0,
+                2063.0
+              ],
+              [
+                16.0,
+                2063.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                18.540115356445312,
+                17.563077926635742
+              ],
+              [
+                2063.462646484375,
+                19.76581382751465
+              ],
+              [
+                2061.260009765625,
+                2065.353759765625
+              ],
+              [
+                12.623560905456543,
+                2064.9619140625
+              ]
+            ],
+            "H": [
+              [
+                0.9998705983161926,
+                -0.002901506843045354,
+                2.588475465774536
+              ],
+              [
+                0.0010846237419173121,
+                0.9983597993850708,
+                1.5718401670455933
+              ],
+              [
+                4.326365683482436e-07,
+                -8.851527582010021e-07,
+                1.0
+              ]
+            ],
+            "pad": 16,
+            "crop_origin": [
+              15,
+              18
+            ],
+            "crop_x": 15,
+            "crop_y": 18,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.9973058582291005
+          }
+        },
+        {
+          "attempt": 6,
+          "scale": 0.11602906250000002,
+          "amp_px": 0.8539739000000002,
+          "perspective_used": 0.0012763196875,
+          "jacobian_min": 0.9848732948303223,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": true,
+            "euler": true,
+            "no_crop": true,
+            "wall_core_integrity": true,
+            "jacobian_min": 0.9848732948303223,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 18,
+            "original_euler": 29,
+            "candidate_euler": 29,
+            "wall_core_recall": 0.9928040161716749,
+            "crop_recall": 0.9967712813976953
+          },
+          "failure_reasons": [],
+          "metadata": {
+            "attempt": 6,
+            "scale": 0.11602906250000002,
+            "amp_px": 0.8539739000000002,
+            "jacobian_min": 0.9848732948303223,
+            "perspective_requested": true,
+            "perspective_used": 0.0012763196875,
+            "src_corners": [
+              [
+                16.0,
+                16.0
+              ],
+              [
+                2063.0,
+                16.0
+              ],
+              [
+                2063.0,
+                2063.0
+              ],
+              [
+                16.0,
+                2063.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                14.277854919433594,
+                16.42692756652832
+              ],
+              [
+                2064.85595703125,
+                15.753813743591309
+              ],
+              [
+                2062.231201171875,
+                2063.64892578125
+              ],
+              [
+                18.52533531188965,
+                2063.6279296875
+              ]
+            ],
+            "H": [
+              [
+                1.0014296770095825,
+                0.002105455845594406,
+                -1.7783702611923218
+              ],
+              [
+                -0.0003314460045658052,
+                1.0035114288330078,
+                0.3764362037181854
+              ],
+              [
+                -1.655986636706075e-07,
+                1.6425397006969433e-06,
+                1.0
+              ]
+            ],
+            "pad": 16,
+            "crop_origin": [
+              16,
+              16
+            ],
+            "crop_x": 16,
+            "crop_y": 16,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.9967712813976953,
+            "wall_core_recall": 0.9928040161716749
+          }
+        }
+      ]
+    },
+    "max_readable": {
+      "status": "PASS",
+      "failure_reasons": [],
+      "validation": {
+        "jacobian": true,
+        "wall_components": true,
+        "free_space_components": true,
+        "euler": true,
+        "no_crop": true,
+        "wall_core_integrity": true,
+        "jacobian_min": 0.9661635160446167,
+        "original_wall_components": 45,
+        "candidate_wall_components": 45,
+        "original_free_components": 18,
+        "candidate_free_components": 18,
+        "original_euler": 29,
+        "candidate_euler": 29,
+        "wall_core_recall": 0.989707531350623,
+        "crop_recall": 0.9968240131185534
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "scale": 1.0,
+          "amp_px": 9.28,
+          "perspective_used": 0.014,
+          "jacobian_min": 0.8425522446632385,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": false,
+            "euler": false,
+            "no_crop": true,
+            "wall_core_integrity": false,
+            "jacobian_min": 0.8425522446632385,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 23,
+            "original_euler": 29,
+            "candidate_euler": 30,
+            "wall_core_recall": 0.9757116257059677,
+            "crop_recall": 0.9975310436927186
+          },
+          "failure_reasons": [
+            "free_space_components",
+            "euler",
+            "wall_core_integrity"
+          ],
+          "metadata": {
+            "attempt": 1,
+            "scale": 1.0,
+            "amp_px": 9.28,
+            "jacobian_min": 0.8425522446632385,
+            "perspective_requested": true,
+            "perspective_used": 0.014,
+            "src_corners": [
+              [
+                61.0,
+                61.0
+              ],
+              [
+                2108.0,
+                61.0
+              ],
+              [
+                2108.0,
+                2108.0
+              ],
+              [
+                61.0,
+                2108.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                80.28581237792969,
+                56.62775421142578
+              ],
+              [
+                2128.779052734375,
+                65.60192108154297
+              ],
+              [
+                2127.93994140625,
+                2121.3642578125
+              ],
+              [
+                77.57498168945312,
+                2109.904052734375
+              ]
+            ],
+            "H": [
+              [
+                0.9994140863418579,
+                -0.0013588223373517394,
+                19.399375915527344
+              ],
+              [
+                0.004345191642642021,
+                1.0020614862442017,
+                -4.766623020172119
+              ],
+              [
+                -5.882435516468831e-07,
+                -4.4616822947318724e-07,
+                1.0
+              ]
+            ],
+            "pad": 61,
+            "crop_origin": [
+              80,
+              65
+            ],
+            "crop_x": 80,
+            "crop_y": 65,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.9975310436927186
+          }
+        },
+        {
+          "attempt": 2,
+          "scale": 0.65,
+          "amp_px": 6.032,
+          "perspective_used": 0.0091,
+          "jacobian_min": 0.8951769471168518,
+          "validation": {
+            "jacobian": true,
+            "wall_components": false,
+            "free_space_components": false,
+            "euler": false,
+            "no_crop": false,
+            "wall_core_integrity": false,
+            "jacobian_min": 0.8951769471168518,
+            "original_wall_components": 45,
+            "candidate_wall_components": 47,
+            "original_free_components": 18,
+            "candidate_free_components": 21,
+            "original_euler": 29,
+            "candidate_euler": 31,
+            "wall_core_recall": 0.9420720729988581,
+            "crop_recall": 0.9791383440150191
+          },
+          "failure_reasons": [
+            "wall_components",
+            "free_space_components",
+            "euler",
+            "no_crop",
+            "wall_core_integrity"
+          ],
+          "metadata": {
+            "attempt": 2,
+            "scale": 0.65,
+            "amp_px": 6.032,
+            "jacobian_min": 0.8951769471168518,
+            "perspective_requested": true,
+            "perspective_used": 0.0091,
+            "src_corners": [
+              [
+                41.0,
+                41.0
+              ],
+              [
+                2088.0,
+                41.0
+              ],
+              [
+                2088.0,
+                2088.0
+              ],
+              [
+                41.0,
+                2088.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                25.044281005859375,
+                55.730838775634766
+              ],
+              [
+                2084.7880859375,
+                43.68354797363281
+              ],
+              [
+                2081.081298828125,
+                2102.773681640625
+              ],
+              [
+                35.53337097167969,
+                2095.947021484375
+              ]
+            ],
+            "H": [
+              [
+                0.9968216419219971,
+                0.005244068801403046,
+                -16.041547775268555
+              ],
+              [
+                -0.006081162020564079,
+                1.003729224205017,
+                14.824740409851074
+              ],
+              [
+                -4.488860213314183e-06,
+                3.381985379746766e-06,
+                1.0
+              ]
+            ],
+            "pad": 41,
+            "crop_origin": [
+              31,
+              50
+            ],
+            "crop_x": 31,
+            "crop_y": 50,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.9791383440150191
+          }
+        },
+        {
+          "attempt": 3,
+          "scale": 0.42250000000000004,
+          "amp_px": 3.9208000000000003,
+          "perspective_used": 0.005915000000000001,
+          "jacobian_min": 0.9181562662124634,
+          "validation": {
+            "jacobian": true,
+            "wall_components": false,
+            "free_space_components": true,
+            "euler": false,
+            "no_crop": false,
+            "wall_core_integrity": false,
+            "jacobian_min": 0.9181562662124634,
+            "original_wall_components": 45,
+            "candidate_wall_components": 50,
+            "original_free_components": 18,
+            "candidate_free_components": 18,
+            "original_euler": 29,
+            "candidate_euler": 35,
+            "wall_core_recall": 0.9119559290997562,
+            "crop_recall": 0.9421518653425457
+          },
+          "failure_reasons": [
+            "wall_components",
+            "euler",
+            "no_crop",
+            "wall_core_integrity"
+          ],
+          "metadata": {
+            "attempt": 3,
+            "scale": 0.42250000000000004,
+            "amp_px": 3.9208000000000003,
+            "jacobian_min": 0.9181562662124634,
+            "perspective_requested": true,
+            "perspective_used": 0.005915000000000001,
+            "src_corners": [
+              [
+                28.0,
+                28.0
+              ],
+              [
+                2075.0,
+                28.0
+              ],
+              [
+                2075.0,
+                2075.0
+              ],
+              [
+                28.0,
+                2075.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                20.659000396728516,
+                31.971820831298828
+              ],
+              [
+                2076.753173828125,
+                26.078874588012695
+              ],
+              [
+                2085.412109375,
+                2065.396484375
+              ],
+              [
+                16.797134399414062,
+                2066.533203125
+              ]
+            ],
+            "H": [
+              [
+                1.0019582509994507,
+                -0.0019359630532562733,
+                -7.343991756439209
+              ],
+              [
+                -0.002908243564888835,
+                0.987709641456604,
+                4.393717288970947
+              ],
+              [
+                -1.1408722002670402e-06,
+                -2.9517721031879773e-06,
+                1.0
+              ]
+            ],
+            "pad": 28,
+            "crop_origin": [
+              28,
+              23
+            ],
+            "crop_x": 28,
+            "crop_y": 23,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.9421518653425457
+          }
+        },
+        {
+          "attempt": 4,
+          "scale": 0.274625,
+          "amp_px": 2.54852,
+          "perspective_used": 0.00384475,
+          "jacobian_min": 0.9622794389724731,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": false,
+            "euler": true,
+            "no_crop": true,
+            "wall_core_integrity": false,
+            "jacobian_min": 0.9622794389724731,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 22,
+            "original_euler": 29,
+            "candidate_euler": 29,
+            "wall_core_recall": 0.9848930632567613,
+            "crop_recall": 0.9982392531654701
+          },
+          "failure_reasons": [
+            "free_space_components",
+            "wall_core_integrity"
+          ],
+          "metadata": {
+            "attempt": 4,
+            "scale": 0.274625,
+            "amp_px": 2.54852,
+            "jacobian_min": 0.9622794389724731,
+            "perspective_requested": true,
+            "perspective_used": 0.00384475,
+            "src_corners": [
+              [
+                19.0,
+                19.0
+              ],
+              [
+                2066.0,
+                19.0
+              ],
+              [
+                2066.0,
+                2066.0
+              ],
+              [
+                19.0,
+                2066.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                21.06563949584961,
+                22.406391143798828
+              ],
+              [
+                2068.189453125,
+                12.28721809387207
+              ],
+              [
+                2072.0751953125,
+                2066.52783203125
+              ],
+              [
+                24.997844696044922,
+                2061.948486328125
+              ]
+            ],
+            "H": [
+              [
+                0.9927655458450317,
+                0.0019212760962545872,
+                2.16519832611084
+              ],
+              [
+                -0.004986036568880081,
+                0.9963274002075195,
+                3.569425344467163
+              ],
+              [
+                -3.495269083941821e-06,
+                1.7722051381952042e-08,
+                1.0
+              ]
+            ],
+            "pad": 19,
+            "crop_origin": [
+              23,
+              16
+            ],
+            "crop_x": 23,
+            "crop_y": 16,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.9982392531654701
+          }
+        },
+        {
+          "attempt": 5,
+          "scale": 0.17850625000000003,
+          "amp_px": 1.6565380000000003,
+          "perspective_used": 0.0024990875000000007,
+          "jacobian_min": 0.9661635160446167,
+          "validation": {
+            "jacobian": true,
+            "wall_components": true,
+            "free_space_components": true,
+            "euler": true,
+            "no_crop": true,
+            "wall_core_integrity": true,
+            "jacobian_min": 0.9661635160446167,
+            "original_wall_components": 45,
+            "candidate_wall_components": 45,
+            "original_free_components": 18,
+            "candidate_free_components": 18,
+            "original_euler": 29,
+            "candidate_euler": 29,
+            "wall_core_recall": 0.989707531350623,
+            "crop_recall": 0.9968240131185534
+          },
+          "failure_reasons": [],
+          "metadata": {
+            "attempt": 5,
+            "scale": 0.17850625000000003,
+            "amp_px": 1.6565380000000003,
+            "jacobian_min": 0.9661635160446167,
+            "perspective_requested": true,
+            "perspective_used": 0.0024990875000000007,
+            "src_corners": [
+              [
+                16.0,
+                16.0
+              ],
+              [
+                2063.0,
+                16.0
+              ],
+              [
+                2063.0,
+                2063.0
+              ],
+              [
+                16.0,
+                2063.0
+              ]
+            ],
+            "dst_corners": [
+              [
+                12.216500282287598,
+                18.631519317626953
+              ],
+              [
+                2061.053955078125,
+                14.047929763793945
+              ],
+              [
+                2062.396728515625,
+                2067.173828125
+              ],
+              [
+                17.35784912109375,
+                2067.2509765625
+              ]
+            ],
+            "H": [
+              [
+                0.9986851215362549,
+                0.00252740690484643,
+                -3.802931785583496
+              ],
+              [
+                -0.0022542309015989304,
+                1.0026657581329346,
+                2.624885320663452
+              ],
+              [
+                -1.0722234264903818e-06,
+                9.081069265448605e-07,
+                1.0
+              ]
+            ],
+            "pad": 16,
+            "crop_origin": [
+              14,
+              17
+            ],
+            "crop_x": 14,
+            "crop_y": 17,
+            "crop_width": 2048,
+            "crop_height": 2048,
+            "crop_recall": 0.9968240131185534,
+            "wall_core_recall": 0.989707531350623
+          }
+        }
+      ]
     }
   },
   "recommended": "medium",
