@@ -84,6 +84,7 @@
     }
   },
   "no_perspective": false,
+  "perspective_requested": true,
   "validations": {
     "subtle": {
       "jacobian": true,
@@ -92,14 +93,15 @@
       "euler": true,
       "no_crop": true,
       "wall_core_integrity": true,
-      "jacobian_min": 0.9703719019889832,
+      "jacobian_min": 0.9660613536834717,
       "original_wall_components": 45,
       "candidate_wall_components": 45,
       "original_free_components": 18,
       "candidate_free_components": 18,
       "original_euler": 29,
       "candidate_euler": 29,
-      "wall_core_recall": 0.9946865966442746
+      "wall_core_recall": 0.9915489625232751,
+      "crop_recall": 0.9999626942232005
     },
     "low": {
       "jacobian": true,
@@ -108,14 +110,15 @@
       "euler": true,
       "no_crop": true,
       "wall_core_integrity": true,
-      "jacobian_min": 0.9472693204879761,
+      "jacobian_min": 0.9918010830879211,
       "original_wall_components": 45,
       "candidate_wall_components": 45,
       "original_free_components": 18,
       "candidate_free_components": 18,
       "original_euler": 29,
       "candidate_euler": 29,
-      "wall_core_recall": 1.0
+      "wall_core_recall": 0.9996913802503935,
+      "crop_recall": 1.0
     },
     "medium": {
       "jacobian": true,
@@ -124,14 +127,15 @@
       "euler": true,
       "no_crop": true,
       "wall_core_integrity": true,
-      "jacobian_min": 0.9240347146987915,
+      "jacobian_min": 0.9822869300842285,
       "original_wall_components": 45,
       "candidate_wall_components": 45,
       "original_free_components": 18,
       "candidate_free_components": 18,
       "original_euler": 29,
       "candidate_euler": 29,
-      "wall_core_recall": 0.998276873064697
+      "wall_core_recall": 0.9970989743536988,
+      "crop_recall": 1.0
     },
     "strong": {
       "jacobian": true,
@@ -140,14 +144,15 @@
       "euler": true,
       "no_crop": true,
       "wall_core_integrity": true,
-      "jacobian_min": 0.8993916511535645,
+      "jacobian_min": 0.9848732948303223,
       "original_wall_components": 45,
       "candidate_wall_components": 45,
       "original_free_components": 18,
       "candidate_free_components": 18,
       "original_euler": 29,
       "candidate_euler": 29,
-      "wall_core_recall": 1.0
+      "wall_core_recall": 0.9928040161716749,
+      "crop_recall": 0.9967712813976953
     },
     "max_readable": {
       "jacobian": true,
@@ -156,51 +161,377 @@
       "euler": true,
       "no_crop": true,
       "wall_core_integrity": true,
-      "jacobian_min": 0.8773462176322937,
+      "jacobian_min": 0.9661635160446167,
       "original_wall_components": 45,
       "candidate_wall_components": 45,
       "original_free_components": 18,
       "candidate_free_components": 18,
       "original_euler": 29,
       "candidate_euler": 29,
-      "wall_core_recall": 1.0
+      "wall_core_recall": 0.989707531350623,
+      "crop_recall": 0.9968240131185534
     }
   },
   "attempts": {
     "subtle": {
-      "attempt": 2,
-      "amp_px": 1.536,
-      "jacobian_min": 0.9703719019889832,
-      "perspective_used": 0.0,
-      "wall_core_recall": 0.9946865966442746
+      "attempt": 1,
+      "scale": 1.0,
+      "amp_px": 1.92,
+      "jacobian_min": 0.9660613536834717,
+      "perspective_requested": true,
+      "perspective_used": 0.003,
+      "src_corners": [
+        [
+          16.0,
+          16.0
+        ],
+        [
+          2063.0,
+          16.0
+        ],
+        [
+          2063.0,
+          2063.0
+        ],
+        [
+          16.0,
+          2063.0
+        ]
+      ],
+      "dst_corners": [
+        [
+          15.52188777923584,
+          15.476975440979004
+        ],
+        [
+          2057.406494140625,
+          11.650585174560547
+        ],
+        [
+          2063.68603515625,
+          2064.169189453125
+        ],
+        [
+          21.372867584228516,
+          2061.52587890625
+        ]
+      ],
+      "H": [
+        [
+          0.9943071603775024,
+          0.0028561546932905912,
+          -0.43313148617744446
+        ],
+        [
+          -0.0018871566280722618,
+          0.9993076324462891,
+          -0.482157438993454
+        ],
+        [
+          -1.5396867638628464e-06,
+          -9.777460974191854e-08,
+          1.0
+        ]
+      ],
+      "pad": 16,
+      "crop_origin": [
+        16,
+        14
+      ],
+      "crop_x": 16,
+      "crop_y": 14,
+      "crop_width": 2048,
+      "crop_height": 2048,
+      "crop_recall": 0.9999626942232005,
+      "wall_core_recall": 0.9915489625232751
     },
     "low": {
-      "attempt": 2,
-      "amp_px": 2.9440000000000004,
-      "jacobian_min": 0.9472693204879761,
-      "perspective_used": 0.0,
-      "wall_core_recall": 1.0
+      "attempt": 6,
+      "scale": 0.11602906250000002,
+      "amp_px": 0.4269869500000001,
+      "jacobian_min": 0.9918010830879211,
+      "perspective_requested": true,
+      "perspective_used": 0.0005801453125000001,
+      "src_corners": [
+        [
+          16.0,
+          16.0
+        ],
+        [
+          2063.0,
+          16.0
+        ],
+        [
+          2063.0,
+          2063.0
+        ],
+        [
+          16.0,
+          2063.0
+        ]
+      ],
+      "dst_corners": [
+        [
+          15.721454620361328,
+          15.005087852478027
+        ],
+        [
+          2063.422119140625,
+          17.15683937072754
+        ],
+        [
+          2062.71728515625,
+          2062.160400390625
+        ],
+        [
+          16.854963302612305,
+          2062.141357421875
+        ]
+      ],
+      "H": [
+        [
+          1.0014086961746216,
+          0.0005611516535282135,
+          -0.3098249137401581
+        ],
+        [
+          0.0010599300730973482,
+          1.0009872913360596,
+          -1.0274406671524048
+        ],
+        [
+          5.094747734801786e-07,
+          4.3914948832934897e-07,
+          1.0
+        ]
+      ],
+      "pad": 16,
+      "crop_origin": [
+        16,
+        15
+      ],
+      "crop_x": 16,
+      "crop_y": 15,
+      "crop_width": 2048,
+      "crop_height": 2048,
+      "crop_recall": 1.0,
+      "wall_core_recall": 0.9996913802503935
     },
     "medium": {
-      "attempt": 2,
-      "amp_px": 4.352,
-      "jacobian_min": 0.9240347146987915,
-      "perspective_used": 0.0,
-      "wall_core_recall": 0.998276873064697
+      "attempt": 5,
+      "scale": 0.17850625000000003,
+      "amp_px": 0.9710740000000002,
+      "jacobian_min": 0.9822869300842285,
+      "perspective_requested": true,
+      "perspective_used": 0.0014280500000000004,
+      "src_corners": [
+        [
+          16.0,
+          16.0
+        ],
+        [
+          2063.0,
+          16.0
+        ],
+        [
+          2063.0,
+          2063.0
+        ],
+        [
+          16.0,
+          2063.0
+        ]
+      ],
+      "dst_corners": [
+        [
+          15.684697151184082,
+          18.716642379760742
+        ],
+        [
+          2061.71826171875,
+          18.533050537109375
+        ],
+        [
+          2061.957763671875,
+          2061.239501953125
+        ],
+        [
+          15.626972198486328,
+          2061.21728515625
+        ]
+      ],
+      "H": [
+        [
+          0.9994244575500488,
+          -2.930847585957963e-05,
+          -0.30565574765205383
+        ],
+        [
+          -9.060025331564248e-05,
+          0.9976537823677063,
+          2.7555949687957764
+        ],
+        [
+          -4.921893648202058e-08,
+          -7.095096776765786e-08,
+          1.0
+        ]
+      ],
+      "pad": 16,
+      "crop_origin": [
+        15,
+        16
+      ],
+      "crop_x": 15,
+      "crop_y": 16,
+      "crop_width": 2048,
+      "crop_height": 2048,
+      "crop_recall": 1.0,
+      "wall_core_recall": 0.9970989743536988
     },
     "strong": {
-      "attempt": 2,
-      "amp_px": 5.888000000000001,
-      "jacobian_min": 0.8993916511535645,
-      "perspective_used": 0.0,
-      "wall_core_recall": 1.0
+      "attempt": 6,
+      "scale": 0.11602906250000002,
+      "amp_px": 0.8539739000000002,
+      "jacobian_min": 0.9848732948303223,
+      "perspective_requested": true,
+      "perspective_used": 0.0012763196875,
+      "src_corners": [
+        [
+          16.0,
+          16.0
+        ],
+        [
+          2063.0,
+          16.0
+        ],
+        [
+          2063.0,
+          2063.0
+        ],
+        [
+          16.0,
+          2063.0
+        ]
+      ],
+      "dst_corners": [
+        [
+          14.277854919433594,
+          16.42692756652832
+        ],
+        [
+          2064.85595703125,
+          15.753813743591309
+        ],
+        [
+          2062.231201171875,
+          2063.64892578125
+        ],
+        [
+          18.52533531188965,
+          2063.6279296875
+        ]
+      ],
+      "H": [
+        [
+          1.0014296770095825,
+          0.002105455845594406,
+          -1.7783702611923218
+        ],
+        [
+          -0.0003314460045658052,
+          1.0035114288330078,
+          0.3764362037181854
+        ],
+        [
+          -1.655986636706075e-07,
+          1.6425397006969433e-06,
+          1.0
+        ]
+      ],
+      "pad": 16,
+      "crop_origin": [
+        16,
+        16
+      ],
+      "crop_x": 16,
+      "crop_y": 16,
+      "crop_width": 2048,
+      "crop_height": 2048,
+      "crop_recall": 0.9967712813976953,
+      "wall_core_recall": 0.9928040161716749
     },
     "max_readable": {
-      "attempt": 3,
-      "amp_px": 5.9392000000000005,
-      "jacobian_min": 0.8773462176322937,
-      "perspective_used": 0.0,
-      "wall_core_recall": 1.0
+      "attempt": 5,
+      "scale": 0.17850625000000003,
+      "amp_px": 1.6565380000000003,
+      "jacobian_min": 0.9661635160446167,
+      "perspective_requested": true,
+      "perspective_used": 0.0024990875000000007,
+      "src_corners": [
+        [
+          16.0,
+          16.0
+        ],
+        [
+          2063.0,
+          16.0
+        ],
+        [
+          2063.0,
+          2063.0
+        ],
+        [
+          16.0,
+          2063.0
+        ]
+      ],
+      "dst_corners": [
+        [
+          12.216500282287598,
+          18.631519317626953
+        ],
+        [
+          2061.053955078125,
+          14.047929763793945
+        ],
+        [
+          2062.396728515625,
+          2067.173828125
+        ],
+        [
+          17.35784912109375,
+          2067.2509765625
+        ]
+      ],
+      "H": [
+        [
+          0.9986851215362549,
+          0.00252740690484643,
+          -3.802931785583496
+        ],
+        [
+          -0.0022542309015989304,
+          1.0026657581329346,
+          2.624885320663452
+        ],
+        [
+          -1.0722234264903818e-06,
+          9.081069265448605e-07,
+          1.0
+        ]
+      ],
+      "pad": 16,
+      "crop_origin": [
+        14,
+        17
+      ],
+      "crop_x": 14,
+      "crop_y": 17,
+      "crop_width": 2048,
+      "crop_height": 2048,
+      "crop_recall": 0.9968240131185534,
+      "wall_core_recall": 0.989707531350623
     }
   },
   "recommended": "medium",
