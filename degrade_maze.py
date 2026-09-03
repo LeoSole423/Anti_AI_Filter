@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -101,11 +102,30 @@ def _normalize_field(field: np.ndarray) -> np.ndarray:
     return np.clip((field - lo) / (hi - lo) * 2.0 - 1.0, -1.0, 1.0)
 
 
-def load_image(path: str | Path) -> Tuple[np.ndarray, np.ndarray]:
-    """Return an RGB uint8 image and an optional alpha channel."""
-    pil = Image.open(path).convert("RGBA")
-    rgba = np.asarray(pil, dtype=np.uint8)
-    return rgba[..., :3].copy(), rgba[..., 3].copy()
+def parse_background(value: str) -> Tuple[int, int, int]:
+    """Parse an explicit RGB background in #rrggbb form for alpha flattening."""
+    if not isinstance(value, str) or re.fullmatch(r"#[0-9a-fA-F]{6}", value) is None:
+        raise argparse.ArgumentTypeError("--background debe tener formato hexadecimal #rrggbb, por ejemplo #ffffff")
+    return tuple(int(value[i:i+2], 16) for i in (1, 3, 5))
+
+
+def _background_hex(background: Tuple[int, int, int]) -> str:
+    return "#" + "".join(f"{int(channel):02x}" for channel in background)
+
+
+def load_image(path: str | Path, background: Tuple[int, int, int] = (255, 255, 255), return_metadata: bool = False):
+    """Flatten input RGBA over an explicit RGB background before analysis."""
+    source = Image.open(path)
+    input_mode = source.mode
+    had_alpha = "A" in source.getbands() or "transparency" in source.info
+    src = source.convert("RGBA")
+    bg = Image.new("RGBA", src.size, (*background, 255))
+    flattened = Image.alpha_composite(bg, src).convert("RGB")
+    rgb = np.asarray(flattened, dtype=np.uint8).copy()
+    alpha = np.asarray(src.getchannel("A"), dtype=np.uint8).copy()
+    if return_metadata:
+        return rgb, alpha, {"input_mode": input_mode, "had_alpha": bool(had_alpha), "background": _background_hex(background)}
+    return rgb, alpha
 
 
 def parse_roi(roi: Optional[str], width: int, height: int) -> Optional[Tuple[int, int, int, int]]:
@@ -587,12 +607,13 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
     ap.add_argument("input", type=Path); ap.add_argument("--output-dir", type=Path, default=Path("output")); ap.add_argument("--seed", type=int, default=423)
     ap.add_argument("--roi", help="x,y,w,h; si falta se detecta automaticamente"); ap.add_argument("--levels", default="all", help="all o lista separada por comas")
     ap.add_argument("--pdf", action="store_true", help="generar también el PDF A4 raster"); ap.add_argument("--debug", action="store_true", help="guardar máscaras, campos y recuperaciones"); ap.add_argument("--no-perspective", action="store_true")
+    ap.add_argument("--background", type=parse_background, default=(255,255,255), help="fondo RGB para aplanar transparencia, formato #rrggbb")
     args=ap.parse_args(argv)
     if not args.input.exists(): ap.error(f"No existe la imagen: {args.input}")
     if args.output_dir.resolve() == args.input.resolve().parent: ap.error("--output-dir no puede ser la carpeta de la imagen original")
     levels=_parse_levels(args.levels); args.output_dir.mkdir(parents=True,exist_ok=True)
     debug=args.output_dir/"debug"; debug.mkdir(exist_ok=True)
-    rgb,alpha=load_image(args.input); h,w=rgb.shape[:2]
+    rgb,alpha,load_info=load_image(args.input,args.background,return_metadata=True); h,w=rgb.shape[:2]
     roi=parse_roi(args.roi,w,h); roi=detect_maze_roi(rgb,roi)
     marker=detect_protected_markers(rgb); wall,otsu=extract_wall_mask(rgb,roi,marker); wall_width=estimate_wall_width(wall); masks=build_safety_masks(wall,wall_width)
     analysis=ImageAnalysis(w,h,rgb.shape[2],roi,otsu,wall_width,float((wall>0).mean()),float((cv2.cvtColor(rgb,cv2.COLOR_RGB2HSV)[...,1]>85).mean()),int(marker.sum()))
@@ -619,7 +640,7 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
     recommended="medium" if "medium" in valid_levels else ("strong" if "strong" in valid_levels else (valid_levels[0] if valid_levels else levels[0]))
     rec_rgb=dict(variants)[recommended]; raster=args.output_dir/"maze_recommended_A4.png"; make_a4_raster(rec_rgb,raster)
     if args.pdf: make_image_only_pdf(raster,args.output_dir/"maze_recommended_A4.pdf")
-    config={"input":str(args.input.resolve()),"output_dir":str(args.output_dir.resolve()),"seed":args.seed,"roi":roi,"analysis":asdict(analysis),"levels":levels,"parameters":LEVEL_PARAMS,"no_perspective":args.no_perspective,"perspective_requested":not args.no_perspective,"validations":validations,"attempts":attempts,"recommended":recommended,"pdf_generated":bool(args.pdf)}
+    config={"input":str(args.input.resolve()),"output_dir":str(args.output_dir.resolve()),"seed":args.seed,"roi":roi,"analysis":asdict(analysis),"input_mode":load_info["input_mode"],"had_alpha":load_info["had_alpha"],"background":load_info["background"],"levels":levels,"parameters":LEVEL_PARAMS,"no_perspective":args.no_perspective,"perspective_requested":not args.no_perspective,"validations":validations,"attempts":attempts,"recommended":recommended,"pdf_generated":bool(args.pdf)}
     (args.output_dir/"run_config.json").write_text(json.dumps(config,indent=2,ensure_ascii=False),encoding="utf-8")
     print(json.dumps({"roi":roi,"estimated_wall_width_px":wall_width,"recommended":recommended,"validations":validations},ensure_ascii=False,indent=2))
     return 0

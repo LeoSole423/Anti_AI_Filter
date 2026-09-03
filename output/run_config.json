@@ -24,6 +24,9 @@
     "saturated_fraction": 0.08870267868041992,
     "marker_pixels": 13644
   },
+  "input_mode": "RGBA",
+  "had_alpha": true,
+  "background": "#ffffff",
   "levels": [
     "subtle",
     "low",
