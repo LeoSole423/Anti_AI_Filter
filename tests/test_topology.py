@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from degrade_maze import (apply_elastic_warp, build_safety_masks, estimate_wall_width,
                           add_safe_distractors,
                           apply_perspective_transform, build_perspective_transform,
-                          calculate_crop_recall,
+                          calculate_crop_recall, load_image, parse_background,
                           generate_displacement_field, validate_displacement_jacobian,
                           validate_topology)
 from skimage.measure import euler_number
@@ -110,6 +110,36 @@ def test_distractor_safety_and_no_original_overwrite(tmp_path):
     assert marker.read_text()=="keep"
 
 
+def test_rgba_is_flattened_over_explicit_background(tmp_path):
+    rgba=np.zeros((1,1,4),np.uint8); rgba[0,0]=[0,0,0,0]
+    src=tmp_path/"transparent.png"; Image.fromarray(rgba,"RGBA").save(src)
+    rgb,alpha=load_image(src)
+    assert tuple(rgb[0,0]) == (255,255,255)
+    assert int(alpha[0,0]) == 0
+
+    rgba[0,0]=[200,0,0,128]; Image.fromarray(rgba,"RGBA").save(src)
+    rgb,_=load_image(src)
+    expected=Image.alpha_composite(Image.new("RGBA",(1,1),(255,255,255,255)),Image.fromarray(rgba,"RGBA")).convert("RGB")
+    assert tuple(rgb[0,0]) == tuple(np.asarray(expected)[0,0])
+
+    normal=np.array([[[12,34,56]]],np.uint8); normal_src=tmp_path/"normal.png"; Image.fromarray(normal,"RGB").save(normal_src)
+    normal_rgb,normal_alpha=load_image(normal_src)
+    assert np.array_equal(normal_rgb,normal) and int(normal_alpha[0,0]) == 255
+    assert parse_background("#f2f2f2") == (242,242,242)
+    rgb,_=load_image(src,(242,242,242))
+    expected_custom=Image.alpha_composite(Image.new("RGBA",(1,1),(242,242,242,255)),Image.fromarray(rgba,"RGBA")).convert("RGB")
+    assert tuple(rgb[0,0]) == tuple(np.asarray(expected_custom)[0,0])
+
+
+def test_invalid_background_is_rejected(tmp_path):
+    import pytest
+    with pytest.raises(Exception, match="formato hexadecimal"):
+        parse_background("not-a-color")
+    src=Path(__file__).resolve().parents[1]/"maze-10x10-kids-1788448203980.png"
+    result=subprocess.run([sys.executable,str(Path(__file__).resolve().parents[1]/"degrade_maze.py"),str(src),"--output-dir",str(tmp_path/"bad"),"--levels","subtle","--background","#12"],capture_output=True,text=True)
+    assert result.returncode != 0 and "formato hexadecimal" in result.stderr
+
+
 def test_pdf_generated_and_outputs(tmp_path):
     src=Path(__file__).resolve().parents[1]/"maze-10x10-kids-1788448203980.png"
     source_before=src.read_bytes()
@@ -118,6 +148,8 @@ def test_pdf_generated_and_outputs(tmp_path):
     assert (out/"maze_recommended_A4.pdf").exists()
     assert (out/"maze_recommended_A4.png").exists()
     assert Image.open(out/"maze_recommended_A4.png").size==(2480,3508)
+    assert Image.open(out/"maze_03_medium.png").mode == "RGB"
+    assert Image.open(out/"maze_03_medium.jpg").mode == "RGB"
     data=json.loads((out/"run_config.json").read_text())
     assert src.read_bytes() == source_before
     assert data["perspective_requested"] is True
