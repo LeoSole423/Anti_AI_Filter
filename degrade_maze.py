@@ -66,6 +66,7 @@ class ValidationResult:
     original_euler: int
     candidate_euler: int
     wall_core_recall: float
+    crop_recall: float
 
     @property
     def passed(self) -> bool:
@@ -84,6 +85,12 @@ class PerspectiveTransform:
     strength: float
     output_shape: Tuple[int, int]
     crop_origin: Tuple[int, int]
+
+    @property
+    def crop_window(self) -> Tuple[int, int, int, int]:
+        x, y = self.crop_origin
+        h, w = self.output_shape
+        return x, y, w, h
 
 
 def _normalize_field(field: np.ndarray) -> np.ndarray:
@@ -239,7 +246,7 @@ def build_perspective_transform(shape: Tuple[int, int], rng: np.random.Generator
     return PerspectiveTransform(H, src, dst, pad, float(strength), (h, w), (crop_x, crop_y))
 
 
-def apply_perspective_transform(arr: np.ndarray, transform: PerspectiveTransform, interpolation: int, border_value=0) -> np.ndarray:
+def apply_perspective_transform(arr: np.ndarray, transform: PerspectiveTransform, interpolation: int, border_value=0, crop: bool = True) -> np.ndarray:
     """Apply an already-built H; this function never samples a new jitter."""
     h, w = transform.output_shape
     pad = transform.pad
@@ -259,8 +266,21 @@ def apply_perspective_transform(arr: np.ndarray, transform: PerspectiveTransform
         borderMode=cv2.BORDER_CONSTANT,
         borderValue=border_value,
     )
+    if not crop:
+        return out
     crop_x, crop_y = transform.crop_origin
     return out[crop_y:crop_y+h, crop_x:crop_x+w].copy()
+
+
+def calculate_crop_recall(transformed_structural: np.ndarray, crop_window: Tuple[int, int, int, int]) -> float:
+    """Return the transformed structural pixels retained by a crop window."""
+    x, y, w, h = [int(v) for v in crop_window]
+    structural = transformed_structural > 0
+    expected = int(structural.sum())
+    if expected == 0 or x < 0 or y < 0 or x+w > structural.shape[1] or y+h > structural.shape[0]:
+        return 0.0
+    visible = int(structural[y:y+h, x:x+w].sum())
+    return float(visible / expected)
 
 
 def _field(shape: Tuple[int, int], rng: np.random.Generator, sigma: float) -> np.ndarray:
@@ -369,7 +389,7 @@ def _component_count(mask: np.ndarray) -> int:
     return int(np.sum(areas > max(4, mask.size*1e-6))) if len(areas) else 0
 
 
-def validate_topology(original_wall: np.ndarray, candidate_wall: np.ndarray, original_core: np.ndarray, candidate_core: np.ndarray, original_free: Optional[np.ndarray] = None, candidate_free: Optional[np.ndarray] = None, jacobian_min: float = 1.0) -> ValidationResult:
+def validate_topology(original_wall: np.ndarray, candidate_wall: np.ndarray, original_core: np.ndarray, candidate_core: np.ndarray, original_free: Optional[np.ndarray] = None, candidate_free: Optional[np.ndarray] = None, jacobian_min: float = 1.0, crop_recall: Optional[float] = None) -> ValidationResult:
     ow, cw = original_wall > 0, candidate_wall > 0
     of = ~ow if original_free is None else original_free > 0
     cf = ~cw if candidate_free is None else candidate_free > 0
@@ -381,19 +401,17 @@ def validate_topology(original_wall: np.ndarray, candidate_wall: np.ndarray, ori
     source_area = max(1, int((original_core > 0).sum()))
     candidate_area = int((candidate_core > 0).sum())
     recall = float(min(1.0, candidate_area / source_area))
-    border_original = np.array([ow[0].any(), ow[-1].any(), ow[:,0].any(), ow[:,-1].any()])
-    border_candidate = np.array([cw[0].any(), cw[-1].any(), cw[:,0].any(), cw[:,-1].any()])
-    # Exact edge contact is allowed to move inward under a valid perspective;
-    # use retained wall area as the crop guard instead of requiring pixels on
-    # the same output row/column.
-    no_crop = bool(cw.any() and (cw.sum() >= 0.90 * max(1, ow.sum())))
+    if crop_recall is None:
+        crop_recall = float(cw.sum() / max(1, ow.sum()))
+    no_crop = bool(crop_recall >= 0.995)
     return ValidationResult(
         jacobian=bool(jacobian_min > 0.60), wall_components=oc == cc,
         free_space_components=ofc == cfc, euler=oe == ce, no_crop=no_crop,
         wall_core_integrity=recall >= 0.985 and bool(np.all((candidate_core > 0) <= (candidate_wall > 0))), jacobian_min=float(jacobian_min),
         original_wall_components=oc, candidate_wall_components=cc,
         original_free_components=ofc, candidate_free_components=cfc,
-        original_euler=oe, candidate_euler=ce, wall_core_recall=recall)
+        original_euler=oe, candidate_euler=ce, wall_core_recall=recall,
+        crop_recall=float(crop_recall))
 
 
 def run_recovery_proxies(rgb: np.ndarray, out_dir: Path) -> Dict[str, str]:
@@ -496,6 +514,7 @@ def generate_variant(original_rgb: np.ndarray, wall_mask: np.ndarray, masks: Dic
             extra_margin_px=max(2, int(round(wall_width))))
         # One H is generated above and applied to RGB and every structural plane.
         warped=apply_perspective_transform(warped,perspective_transform,cv2.INTER_LINEAR,border_value=(255,255,255))
+        wm_full=apply_perspective_transform(wm,perspective_transform,cv2.INTER_NEAREST,border_value=0,crop=False)
         wm=apply_perspective_transform(wm,perspective_transform,cv2.INTER_NEAREST,border_value=0)
         wc=apply_perspective_transform(wc,perspective_transform,cv2.INTER_NEAREST,border_value=0)
         we=apply_perspective_transform(we,perspective_transform,cv2.INTER_NEAREST,border_value=0)
@@ -511,7 +530,8 @@ def generate_variant(original_rgb: np.ndarray, wall_mask: np.ndarray, masks: Dic
         edge_bin=np.maximum((we>0).astype(np.uint8),cv2.subtract(structural,core_bin))
         corridor_bin=cv2.subtract((cor>0).astype(np.uint8),structural)
         candidate_masks={"wall_mask":structural,"wall_core":core_bin,"wall_edge":edge_bin,"corridor_core":corridor_bin}
-        val=validate_topology(wall_mask,candidate_masks["wall_mask"],masks["wall_core"],candidate_masks["wall_core"],jacobian_min=jmin)
+        crop_recall=calculate_crop_recall(wm_full,perspective_transform.crop_window)
+        val=validate_topology(wall_mask,candidate_masks["wall_mask"],masks["wall_core"],candidate_masks["wall_core"],jacobian_min=jmin,crop_recall=crop_recall)
         val.jacobian = jac_ok
         best=(warped,val,dict(
             attempt=attempt, scale=scale, amp_px=amp*scale,
@@ -521,6 +541,9 @@ def generate_variant(original_rgb: np.ndarray, wall_mask: np.ndarray, masks: Dic
             dst_corners=perspective_transform.dst.tolist(),
             H=perspective_transform.H.tolist(), pad=perspective_transform.pad,
             crop_origin=list(perspective_transform.crop_origin),
+            crop_x=perspective_transform.crop_window[0], crop_y=perspective_transform.crop_window[1],
+            crop_width=perspective_transform.crop_window[2], crop_height=perspective_transform.crop_window[3],
+            crop_recall=crop_recall,
         ),candidate_masks,dx,dy,jac,mm)
         if val.passed:
             break

@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from degrade_maze import (apply_elastic_warp, build_safety_masks, estimate_wall_width,
                           add_safe_distractors,
                           apply_perspective_transform, build_perspective_transform,
+                          calculate_crop_recall,
                           generate_displacement_field, validate_displacement_jacobian,
                           validate_topology)
 from skimage.measure import euler_number
@@ -77,6 +78,14 @@ def test_perspective_padding_preserves_canvas_without_crop():
     assert 0 <= ys.min() < ys.max() < mask.shape[0]
 
 
+def test_crop_recall_rejects_window_that_cuts_a_wall():
+    full=np.zeros((80,100),np.uint8); full[:,20:24]=1
+    recall=calculate_crop_recall(full,(22,0,78,80))
+    result=validate_topology(full,full,full,full,jacobian_min=.9,crop_recall=recall)
+    assert recall < .995
+    assert result.no_crop is False
+
+
 def test_components_euler_and_core_integrity():
     m=synthetic_maze(); width=estimate_wall_width(m); masks=build_safety_masks(m,width)
     dx,dy=generate_displacement_field(m.shape,np.random.default_rng(2),0.15*width)
@@ -112,6 +121,13 @@ def test_pdf_generated_and_outputs(tmp_path):
     data=json.loads((out/"run_config.json").read_text())
     assert src.read_bytes() == source_before
     assert data["perspective_requested"] is True
-    assert any(data["attempts"][level]["perspective_used"] > 0 for level in data["attempts"])
+    assert all(data["attempts"][level]["perspective_used"] > 0 for level in data["attempts"])
+    assert all(data["validations"][level]["crop_recall"] >= .995 for level in data["validations"])
     for level in ("subtle","low","medium","strong","max_readable"):
         assert all(data["validations"][level][k] for k in ("jacobian","wall_components","free_space_components","euler","no_crop","wall_core_integrity"))
+
+    no_perspective=tmp_path/"out_no_perspective"
+    subprocess.run([sys.executable,str(Path(__file__).resolve().parents[1]/"degrade_maze.py"),str(src),"--output-dir",str(no_perspective),"--seed","423","--no-perspective"],check=True)
+    no_perspective_data=json.loads((no_perspective/"run_config.json").read_text())
+    assert no_perspective_data["perspective_requested"] is False
+    assert all(info["perspective_used"] == 0 for info in no_perspective_data["attempts"].values())
