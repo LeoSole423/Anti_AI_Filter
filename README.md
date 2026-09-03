@@ -18,7 +18,7 @@ Opciones útiles:
 --pdf               crea el PDF A4 image-only
 --debug             guarda máscaras, desplazamientos y proxies de recuperación
 --no-perspective    desactiva la perspectiva global leve
---background #ffffff fondo RGB explícito para aplanar transparencia
+--background "#ffffff" fondo RGB explícito para aplanar transparencia
 ```
 
 ## Diseño de seguridad
