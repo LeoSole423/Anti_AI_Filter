@@ -18,7 +18,8 @@ from degrade_maze import (apply_elastic_warp, build_safety_masks, estimate_wall_
                           VariantResult, MAX_VARIANT_ATTEMPTS, generate_variant,
                           validation_failure_reasons, compare_component_identity,
                           build_topology_reference, validate_seed_correspondence,
-                          validate_post_render)
+                          validate_post_render, generate_pseudo_gap_mask,
+                          apply_pseudo_gaps, PseudoGapMetrics)
 from skimage.measure import euler_number
 
 
@@ -137,6 +138,58 @@ def test_distractor_safety_and_no_original_overwrite(tmp_path):
     assert marker.read_text()=="keep"
 
 
+def pseudo_gap_fixture():
+    wall=np.zeros((120,160),np.uint8)
+    cv2.rectangle(wall,(18,18),(141,101),1,12)
+    cv2.line(wall,(55,18),(55,65),1,12)
+    masks=build_safety_masks(wall,12.0)
+    rgb=np.full((*wall.shape,3),245,np.uint8); rgb[wall>0]=(30,35,45)
+    marker=np.zeros_like(wall); marker[18:30,55:67]=1
+    return rgb,masks,marker
+
+
+def test_pseudo_gaps_lighten_ink_and_protect_core_and_markers():
+    rgb,masks,marker=pseudo_gap_fixture()
+    before_masks={key:value.copy() for key,value in masks.items()}
+    gap=generate_pseudo_gap_mask(masks,12.0,np.random.default_rng(423),.36,marker)
+    out,metrics=apply_pseudo_gaps(rgb,gap,masks,marker,12.0,.36)
+    assert isinstance(metrics,PseudoGapMetrics)
+    assert metrics.affected_pixels > 0
+    assert metrics.mean_luma_delta > 0
+    assert metrics.core_overlap == 0
+    assert metrics.marker_overlap == 0
+    assert not np.any((gap>0)&(masks["wall_core"]>0))
+    assert not np.any((gap>0)&(marker>0))
+    assert np.array_equal(out[masks["wall_core"]>0],rgb[masks["wall_core"]>0])
+    for key,value in before_masks.items():
+        assert np.array_equal(masks[key],value)
+
+
+def test_pseudo_gaps_are_deterministic_and_coverage_is_monotonic():
+    _,masks,marker=pseudo_gap_fixture()
+    gaps=[]
+    metrics=[]
+    for strength in (.16,.36,.60):
+        gap=generate_pseudo_gap_mask(masks,12.0,np.random.default_rng(423),strength,marker)
+        _,item=apply_pseudo_gaps(np.full((120,160,3),245,np.uint8),gap,masks,marker,12.0,strength)
+        gaps.append(gap); metrics.append(item)
+    repeat_gap=generate_pseudo_gap_mask(masks,12.0,np.random.default_rng(423),.36,marker)
+    repeat_out,repeat_metrics=apply_pseudo_gaps(np.full((120,160,3),245,np.uint8),repeat_gap,masks,marker,12.0,.36)
+    reference_out,_=apply_pseudo_gaps(np.full((120,160,3),245,np.uint8),gaps[1],masks,marker,12.0,.36)
+    assert np.array_equal(gaps[1],repeat_gap)
+    assert np.array_equal(reference_out,repeat_out)
+    assert metrics[1] == repeat_metrics
+    assert metrics[0].actual_coverage <= metrics[1].actual_coverage <= metrics[2].actual_coverage
+    assert metrics[0].requested_coverage < metrics[1].requested_coverage < metrics[2].requested_coverage
+
+
+def test_pseudo_gaps_never_darken_when_applied():
+    rgb,masks,marker=pseudo_gap_fixture()
+    gap=generate_pseudo_gap_mask(masks,12.0,np.random.default_rng(9),.60,marker)
+    out,_=apply_pseudo_gaps(rgb,gap,masks,marker,12.0,.60)
+    assert np.all(out.astype(np.int16) >= rgb.astype(np.int16))
+
+
 def test_rgba_is_flattened_over_explicit_background(tmp_path):
     rgba=np.zeros((1,1,4),np.uint8); rgba[0,0]=[0,0,0,0]
     src=tmp_path/"transparent.png"; Image.fromarray(rgba,"RGBA").save(src)
@@ -184,6 +237,12 @@ def test_pdf_generated_and_outputs(tmp_path):
     assert all(data["validations"][level]["crop_recall"] >= .995 for level in data["validations"])
     for level in ("subtle","low","medium","strong","max_readable"):
         assert all(data["validations"][level][k] for k in ("jacobian","wall_components","free_space_components","euler","no_crop","wall_core_integrity"))
+    for level in ("subtle", "low", "medium", "strong"):
+        pseudo=data["attempts"][level]["pseudo_gaps"]
+        assert pseudo["actual_coverage"] > 0
+        assert pseudo["mean_luma_delta"] > 0
+        assert pseudo["core_overlap"] == 0
+        assert pseudo["marker_overlap"] == 0
 
     no_perspective=tmp_path/"out_no_perspective"
     subprocess.run([sys.executable,str(Path(__file__).resolve().parents[1]/"degrade_maze.py"),str(src),"--output-dir",str(no_perspective),"--seed","423","--no-perspective"],check=True)
