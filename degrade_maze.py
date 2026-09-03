@@ -79,6 +79,18 @@ class SkeletonSignature:
 
 
 @dataclass
+class PseudoGapMetrics:
+    requested_coverage: float
+    actual_coverage: float
+    affected_pixels: int
+    mean_luma_before: float
+    mean_luma_after: float
+    mean_luma_delta: float
+    core_overlap: int
+    marker_overlap: int
+
+
+@dataclass
 class PostRenderValidation:
     passed: bool
     contrast_gap: float
@@ -450,11 +462,96 @@ def apply_wall_texture(rgb: np.ndarray, masks: Dict[str, np.ndarray], rng: np.ra
         texture = 0.50*_field((h, w), rng, max(1.0, 0.0015*min(h,w))) + 0.30*_field((h,w), rng, max(2.0, 0.008*min(h,w))) + 0.20*_field((h,w), rng, max(3.0, 0.025*min(h,w)))
         factor = 1.0 + strength * 0.28 * texture
         out[edge] *= factor[edge, None]
-        # Very soft pseudo-gaps only affect edge pixels; the core is reasserted later.
-        scratches = (_field((h, w), rng, max(2.0, 0.006*min(h,w))) > 0.91) & edge
-        out[scratches] = out[scratches] * (1.0 - 0.20*strength)
     out[protected > 0] = rgb[protected > 0]
     return np.clip(out, 0, 255).astype(np.uint8)
+
+
+def generate_pseudo_gap_mask(masks: Dict[str, np.ndarray], wall_width: float,
+                             rng: np.random.Generator, strength: float,
+                             protected_marker: np.ndarray) -> np.ndarray:
+    """Generate short, deterministic ink-loss defects only on the wall edge."""
+    wall_edge = masks["wall_edge"] > 0
+    wall_core = masks["wall_core"] > 0
+    marker = protected_marker > 0
+    core_guard = cv2.dilate(wall_core.astype(np.uint8), np.ones((3, 3), np.uint8), iterations=1) > 0
+    allowed = wall_edge & ~wall_core & ~core_guard & ~marker
+    gap = np.zeros(wall_edge.shape, np.uint8)
+    if not allowed.any():
+        return gap
+    requested = float(np.interp(strength, [0.16, 0.60], [0.012, 0.045]))
+    target_pixels = max(1, int(round(requested * int(allowed.sum()))))
+    allowed_points = np.argwhere(allowed)
+    max_attempts = max(100, target_pixels * 24)
+    for _ in range(max_attempts):
+        if int(gap.sum()) >= target_pixels:
+            break
+        row, col = allowed_points[int(rng.integers(0, len(allowed_points)))]
+        length = float(rng.uniform(0.20, 0.80) * wall_width)
+        thickness = max(1, int(round(rng.uniform(0.06, 0.18) * wall_width)))
+        angle = float(rng.uniform(0.0, 2.0 * np.pi))
+        end = (int(round(col + length * np.cos(angle))), int(round(row + length * np.sin(angle))))
+        candidate = np.zeros_like(gap)
+        cv2.line(candidate, (int(col), int(row)), end, 1, thickness, cv2.LINE_AA)
+        candidate = (candidate > 0) & allowed
+        if int(candidate.sum()) < max(1, int(0.20 * thickness * max(1.0, length))):
+            continue
+        gap[candidate] = 1
+    return gap
+
+
+def apply_pseudo_gaps(rgb: np.ndarray, gap_mask: np.ndarray, masks: Dict[str, np.ndarray],
+                      protected_marker: np.ndarray, wall_width: float,
+                      strength: float) -> Tuple[np.ndarray, PseudoGapMetrics]:
+    """Blend selected edge ink toward locally estimated paper, never darker."""
+    wall_edge = masks["wall_edge"] > 0
+    wall_core = masks["wall_core"] > 0
+    marker = protected_marker > 0
+    core_guard = cv2.dilate(wall_core.astype(np.uint8), np.ones((3, 3), np.uint8), iterations=1) > 0
+    allowed = wall_edge & ~wall_core & ~core_guard & ~marker
+    safe_gap = ((gap_mask > 0) & allowed).astype(np.uint8)
+    allowed_count = int(allowed.sum())
+    affected = int(safe_gap.sum())
+    requested = float(np.interp(strength, [0.16, 0.60], [0.012, 0.045]))
+    if affected == 0:
+        metrics = PseudoGapMetrics(requested, 0.0, 0, 0.0, 0.0, 0.0,
+                                   int(np.count_nonzero((gap_mask > 0) & wall_core)),
+                                   int(np.count_nonzero((gap_mask > 0) & marker)))
+        return rgb.copy(), metrics
+    valid_paper = ((masks["wall_mask"] == 0) & ~marker).astype(np.float32)
+    sigma = max(3.0, 1.5 * float(wall_width))
+    denominator = cv2.GaussianBlur(valid_paper, (0, 0), sigmaX=sigma)
+    paper = np.empty_like(rgb, dtype=np.float32)
+    valid_values = rgb[valid_paper > 0]
+    fallback = np.median(valid_values, axis=0) if valid_values.size else np.array([245.0, 245.0, 245.0])
+    for channel in range(3):
+        numerator = cv2.GaussianBlur(rgb[..., channel].astype(np.float32) * valid_paper,
+                                     (0, 0), sigmaX=sigma)
+        paper[..., channel] = np.divide(numerator, np.maximum(denominator, 1e-3),
+                                        out=np.full_like(numerator, fallback[channel]),
+                                        where=denominator > 1e-3)
+    soft = cv2.GaussianBlur(safe_gap.astype(np.float32), (0, 0), sigmaX=float(np.interp(strength, [0.16, 0.60], [0.30, 0.70])))
+    soft *= allowed.astype(np.float32)
+    alpha = float(np.interp(strength, [0.16, 0.60], [0.20, 0.48])) * soft
+    before = rgb.astype(np.float32)
+    # A local convolution can be contaminated near a dense wall; ensure the
+    # target remains at least one luminance level lighter on affected pixels.
+    current_luma = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY).astype(np.float32)
+    paper_luma = (0.299 * paper[..., 0] + 0.587 * paper[..., 1] + 0.114 * paper[..., 2])
+    fallback_luma = float(0.299 * fallback[0] + 0.587 * fallback[1] + 0.114 * fallback[2])
+    target_luma = np.maximum(paper_luma, np.maximum(current_luma + 1.0, fallback_luma * 0.90))
+    scale = target_luma / np.maximum(paper_luma, 1.0)
+    paper = np.clip(paper * scale[..., None], 0, 255)
+    out = np.clip(before * (1.0 - alpha[..., None]) + paper * alpha[..., None], 0, 255).astype(np.uint8)
+    out[~allowed] = rgb[~allowed]
+    luma_before = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY).astype(np.float32)
+    luma_after = cv2.cvtColor(out, cv2.COLOR_RGB2GRAY).astype(np.float32)
+    before_mean = float(luma_before[safe_gap > 0].mean())
+    after_mean = float(luma_after[safe_gap > 0].mean())
+    metrics = PseudoGapMetrics(requested, float(affected / max(1, allowed_count)), affected,
+                               before_mean, after_mean, after_mean - before_mean,
+                               int(np.count_nonzero((gap_mask > 0) & wall_core)),
+                               int(np.count_nonzero((gap_mask > 0) & marker)))
+    return out, metrics
 
 
 def generate_paper_texture(shape: Tuple[int, int], rng: np.random.Generator, strength: float) -> np.ndarray:
@@ -966,6 +1063,8 @@ def generate_variant(original_rgb: np.ndarray, wall_mask: np.ndarray, masks: Dic
         out=warped.copy()
         out=np.clip(out.astype(np.float32)+generate_paper_texture(out.shape[:2],base_rng,p["texture"])[...,None],0,255).astype(np.uint8)
         out=apply_wall_texture(out,candidate_masks,base_rng,p["texture"],mm)
+        gap_mask=generate_pseudo_gap_mask(candidate_masks,wall_width,base_rng,p["texture"],mm)
+        out,pseudo_gap_metrics=apply_pseudo_gaps(out,gap_mask,candidate_masks,mm,wall_width,p["texture"])
         out=apply_illumination(out,base_rng,p["illumination"],mm)
         out,distractors=add_safe_distractors(out,candidate_masks,wall_width,base_rng,p["distractors"],mm)
         out=apply_optical_degradation(out,base_rng,p["blur"],mm)
@@ -978,6 +1077,7 @@ def generate_variant(original_rgb: np.ndarray, wall_mask: np.ndarray, masks: Dic
         val.post_render=post
         val.post_render_topology=post.passed
         reasons=validation_failure_reasons(val)
+        metadata["pseudo_gaps"]=asdict(pseudo_gap_metrics)
         attempts.append(AttemptResult(attempt, scale, amp*scale, perspective_used, jmin, val, reasons, metadata))
         last_payload=(warped,val,metadata,candidate_masks,dx,dy,jac,mm)
         if not val.passed:
@@ -990,6 +1090,7 @@ def generate_variant(original_rgb: np.ndarray, wall_mask: np.ndarray, masks: Dic
             cv2.imwrite(str(debug_dir/f"wall_core_{level}.png"),candidate_masks["wall_core"]*255)
             cv2.imwrite(str(debug_dir/f"corridor_core_{level}.png"),candidate_masks["corridor_core"]*255)
             cv2.imwrite(str(debug_dir/f"distractors_{level}.png"),distractors*255)
+            cv2.imwrite(str(debug_dir/f"pseudo_gaps_{level}.png"),gap_mask*255)
             render_gray=cv2.cvtColor(out,cv2.COLOR_RGB2GRAY)
             render_wall=(render_gray <= post.threshold).astype(np.uint8)
             render_wall[mm > 0]=0
