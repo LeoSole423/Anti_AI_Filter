@@ -73,6 +73,19 @@ class ValidationResult:
                     self.euler, self.no_crop, self.wall_core_integrity))
 
 
+@dataclass(frozen=True)
+class PerspectiveTransform:
+    """One padded canvas and one homography shared by every image plane."""
+
+    H: np.ndarray
+    src: np.ndarray
+    dst: np.ndarray
+    pad: int
+    strength: float
+    output_shape: Tuple[int, int]
+    crop_origin: Tuple[int, int]
+
+
 def _normalize_field(field: np.ndarray) -> np.ndarray:
     field = field.astype(np.float32)
     lo, hi = np.percentile(field, [1.0, 99.0])
@@ -200,30 +213,54 @@ def validate_displacement_jacobian(dx: np.ndarray, dy: np.ndarray, minimum: floa
     return bool(min_j > minimum), min_j, jac
 
 
-def apply_elastic_warp(image: np.ndarray, dx: np.ndarray, dy: np.ndarray, interpolation: int = cv2.INTER_LINEAR) -> np.ndarray:
+def apply_elastic_warp(image: np.ndarray, dx: np.ndarray, dy: np.ndarray, interpolation: int = cv2.INTER_LINEAR, border_mode: int = cv2.BORDER_REFLECT_101, border_value=0) -> np.ndarray:
     h, w = image.shape[:2]
     x, y = np.meshgrid(np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32))
-    return cv2.remap(image, x + dx.astype(np.float32), y + dy.astype(np.float32), interpolation=interpolation, borderMode=cv2.BORDER_REFLECT_101)
+    return cv2.remap(image, x + dx.astype(np.float32), y + dy.astype(np.float32), interpolation=interpolation, borderMode=border_mode, borderValue=border_value)
 
 
-def _pad_for_perspective(arr: np.ndarray, pad: int, mask: bool = False) -> np.ndarray:
-    mode = cv2.BORDER_REFLECT_101 if not mask else cv2.BORDER_REFLECT_101
-    return cv2.copyMakeBorder(arr, pad, pad, pad, pad, mode)
-
-
-def apply_perspective(image: np.ndarray, rng: np.random.Generator, strength: float, mask: bool = False) -> np.ndarray:
+def build_perspective_transform(shape: Tuple[int, int], rng: np.random.Generator, strength: float, extra_margin_px: int = 0) -> PerspectiveTransform:
+    """Generate exactly one deterministic padded homography for an attempt."""
+    h, w = shape
     if strength <= 0:
-        return image.copy()
-    h, w = image.shape[:2]
-    pad = max(4, int(math.ceil(strength * max(h, w) * 2 + 3)))
+        src = np.float32([[0, 0], [w-1, 0], [w-1, h-1], [0, h-1]])
+        return PerspectiveTransform(np.eye(3, dtype=np.float32), src, src.copy(), 0, 0.0, (h, w), (0, 0))
+    max_jitter = float(strength * min(h, w))
+    pad = max(int(extra_margin_px), int(math.ceil(2.0 * max_jitter + 3.0)))
     src = np.float32([[pad, pad], [pad+w-1, pad], [pad+w-1, pad+h-1], [pad, pad+h-1]])
-    # Destination corners stay inside the padded canvas, so later center crop is safe.
     jitter = rng.uniform(-strength, strength, size=(4, 2)).astype(np.float32) * min(h, w)
     dst = src + jitter
-    padded = _pad_for_perspective(image, pad, mask)
-    hp = cv2.getPerspectiveTransform(src, dst)
-    warped = cv2.warpPerspective(padded, hp, (w + 2*pad, h + 2*pad), flags=cv2.INTER_NEAREST if mask else cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101)
-    return warped[pad:pad+h, pad:pad+w].copy()
+    H = cv2.getPerspectiveTransform(src, dst).astype(np.float32)
+    # Choose the crop window around the transformed content, so a small global
+    # translation does not clip a frame that originally touches the canvas.
+    crop_x = int(round((float(dst[:, 0].min()) + float(dst[:, 0].max()) - (w-1)) / 2.0))
+    crop_y = int(round((float(dst[:, 1].min()) + float(dst[:, 1].max()) - (h-1)) / 2.0))
+    crop_x = max(0, min(crop_x, 2*pad)); crop_y = max(0, min(crop_y, 2*pad))
+    return PerspectiveTransform(H, src, dst, pad, float(strength), (h, w), (crop_x, crop_y))
+
+
+def apply_perspective_transform(arr: np.ndarray, transform: PerspectiveTransform, interpolation: int, border_value=0) -> np.ndarray:
+    """Apply an already-built H; this function never samples a new jitter."""
+    h, w = transform.output_shape
+    pad = transform.pad
+    if pad == 0:
+        padded = arr
+    else:
+        if arr.ndim == 2:
+            value = border_value if np.isscalar(border_value) else 0
+        else:
+            value = border_value if not np.isscalar(border_value) else (border_value,) * arr.shape[2]
+        padded = cv2.copyMakeBorder(arr, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=value)
+    out = cv2.warpPerspective(
+        padded,
+        transform.H,
+        (w + 2*pad, h + 2*pad),
+        flags=interpolation,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=border_value,
+    )
+    crop_x, crop_y = transform.crop_origin
+    return out[crop_y:crop_y+h, crop_x:crop_x+w].copy()
 
 
 def _field(shape: Tuple[int, int], rng: np.random.Generator, sigma: float) -> np.ndarray:
@@ -346,7 +383,10 @@ def validate_topology(original_wall: np.ndarray, candidate_wall: np.ndarray, ori
     recall = float(min(1.0, candidate_area / source_area))
     border_original = np.array([ow[0].any(), ow[-1].any(), ow[:,0].any(), ow[:,-1].any()])
     border_candidate = np.array([cw[0].any(), cw[-1].any(), cw[:,0].any(), cw[:,-1].any()])
-    no_crop = bool(np.all(~border_original | border_candidate))
+    # Exact edge contact is allowed to move inward under a valid perspective;
+    # use retained wall area as the crop guard instead of requiring pixels on
+    # the same output row/column.
+    no_crop = bool(cw.any() and (cw.sum() >= 0.90 * max(1, ow.sum())))
     return ValidationResult(
         jacobian=bool(jacobian_min > 0.60), wall_components=oc == cc,
         free_space_components=ofc == cfc, euler=oe == ce, no_crop=no_crop,
@@ -431,11 +471,7 @@ def make_image_only_pdf(raster_path: Path, pdf_path: Path) -> None:
     c.showPage(); c.save()
 
 
-def _rgb_from_padded_or_mask(arr: np.ndarray, rng: np.random.Generator, perspective: float, is_mask: bool=False) -> np.ndarray:
-    return apply_perspective(arr, rng, perspective, mask=is_mask)
-
-
-def generate_variant(original_rgb: np.ndarray, wall_mask: np.ndarray, masks: Dict[str,np.ndarray], marker: np.ndarray, wall_width: float, level: str, seed: int, no_perspective: bool=False, debug_dir: Optional[Path]=None) -> Tuple[np.ndarray, ValidationResult, Dict[str,float], Dict[str,np.ndarray]]:
+def generate_variant(original_rgb: np.ndarray, wall_mask: np.ndarray, masks: Dict[str,np.ndarray], marker: np.ndarray, wall_width: float, level: str, seed: int, no_perspective: bool=False, debug_dir: Optional[Path]=None) -> Tuple[np.ndarray, ValidationResult, Dict, Dict[str,np.ndarray]]:
     p=LEVEL_PARAMS[level]; base_rng=np.random.default_rng(seed)
     amp=float(p["warp"]*wall_width)
     best=None
@@ -444,26 +480,27 @@ def generate_variant(original_rgb: np.ndarray, wall_mask: np.ndarray, masks: Dic
         # Retry with a substantially safer warp.  This reaches a near-zero
         # fallback within ten attempts, while preserving the requested level
         # on the first successful attempt.
-        scale=0.80**(attempt-1)
+        scale=0.65**(attempt-1)
         dx,dy=generate_displacement_field(original_rgb.shape[:2],rng,amp*scale)
         jac_ok,jmin,jac=validate_displacement_jacobian(dx,dy)
         warped=apply_elastic_warp(original_rgb,dx,dy,cv2.INTER_LINEAR)
-        wm=apply_elastic_warp(wall_mask,dx,dy,cv2.INTER_NEAREST)
-        wc=apply_elastic_warp(masks["wall_core"],dx,dy,cv2.INTER_NEAREST)
-        we=apply_elastic_warp(masks["wall_edge"],dx,dy,cv2.INTER_NEAREST)
-        cor=apply_elastic_warp(masks["corridor_core"],dx,dy,cv2.INTER_NEAREST)
-        mm=apply_elastic_warp(marker,dx,dy,cv2.INTER_NEAREST)
-        perspective_used = 0.0
-        # Perspective is attempted on the primary candidate.  A structural
-        # retry disables it so sampling artifacts cannot consume all attempts.
-        if not no_perspective and attempt == 1:
-            perspective_used=p["perspective"]*scale
-            warped=_rgb_from_padded_or_mask(warped,rng,perspective_used)
-            wm=_rgb_from_padded_or_mask(wm,rng,perspective_used,True)
-            wc=_rgb_from_padded_or_mask(wc,rng,perspective_used,True)
-            we=_rgb_from_padded_or_mask(we,rng,perspective_used,True)
-            cor=_rgb_from_padded_or_mask(cor,rng,perspective_used,True)
-            mm=_rgb_from_padded_or_mask(mm,rng,perspective_used,True)
+        wm=apply_elastic_warp(wall_mask,dx,dy,cv2.INTER_NEAREST,cv2.BORDER_CONSTANT,0)
+        wc=apply_elastic_warp(masks["wall_core"],dx,dy,cv2.INTER_NEAREST,cv2.BORDER_CONSTANT,0)
+        we=apply_elastic_warp(masks["wall_edge"],dx,dy,cv2.INTER_NEAREST,cv2.BORDER_CONSTANT,0)
+        cor=apply_elastic_warp(masks["corridor_core"],dx,dy,cv2.INTER_NEAREST,cv2.BORDER_CONSTANT,0)
+        mm=apply_elastic_warp(marker,dx,dy,cv2.INTER_NEAREST,cv2.BORDER_CONSTANT,0)
+        perspective_requested=not no_perspective
+        perspective_used=p["perspective"]*scale if perspective_requested else 0.0
+        perspective_transform=build_perspective_transform(
+            original_rgb.shape[:2], rng, perspective_used,
+            extra_margin_px=max(2, int(round(wall_width))))
+        # One H is generated above and applied to RGB and every structural plane.
+        warped=apply_perspective_transform(warped,perspective_transform,cv2.INTER_LINEAR,border_value=(255,255,255))
+        wm=apply_perspective_transform(wm,perspective_transform,cv2.INTER_NEAREST,border_value=0)
+        wc=apply_perspective_transform(wc,perspective_transform,cv2.INTER_NEAREST,border_value=0)
+        we=apply_perspective_transform(we,perspective_transform,cv2.INTER_NEAREST,border_value=0)
+        cor=apply_perspective_transform(cor,perspective_transform,cv2.INTER_NEAREST,border_value=0)
+        mm=apply_perspective_transform(mm,perspective_transform,cv2.INTER_NEAREST,border_value=0)
         # Keep the independently warped wall mask as the topology reference.
         # Dilation here would be visually tempting but could close a narrow
         # passage.  Include any core pixel lost to a one-pixel sampling tie;
@@ -471,13 +508,20 @@ def generate_variant(original_rgb: np.ndarray, wall_mask: np.ndarray, masks: Dic
         # protected source core.
         core_bin=(wc>0).astype(np.uint8)
         structural=np.maximum((wm>0).astype(np.uint8), core_bin)
-        edge_bin=cv2.subtract(structural,core_bin)
-        free_dist=cv2.distanceTransform((structural==0).astype(np.uint8)*255,cv2.DIST_L2,5)
-        corridor_bin=(free_dist>=max(1.0,0.65*wall_width)).astype(np.uint8)
+        edge_bin=np.maximum((we>0).astype(np.uint8),cv2.subtract(structural,core_bin))
+        corridor_bin=cv2.subtract((cor>0).astype(np.uint8),structural)
         candidate_masks={"wall_mask":structural,"wall_core":core_bin,"wall_edge":edge_bin,"corridor_core":corridor_bin}
         val=validate_topology(wall_mask,candidate_masks["wall_mask"],masks["wall_core"],candidate_masks["wall_core"],jacobian_min=jmin)
         val.jacobian = jac_ok
-        best=(warped,val,dict(attempt=attempt,amp_px=amp*scale,jacobian_min=jmin,perspective_used=perspective_used),candidate_masks,dx,dy,jac,mm)
+        best=(warped,val,dict(
+            attempt=attempt, scale=scale, amp_px=amp*scale,
+            jacobian_min=jmin, perspective_requested=perspective_requested,
+            perspective_used=perspective_used,
+            src_corners=perspective_transform.src.tolist(),
+            dst_corners=perspective_transform.dst.tolist(),
+            H=perspective_transform.H.tolist(), pad=perspective_transform.pad,
+            crop_origin=list(perspective_transform.crop_origin),
+        ),candidate_masks,dx,dy,jac,mm)
         if val.passed:
             break
     assert best is not None
@@ -552,7 +596,7 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
     recommended="medium" if "medium" in valid_levels else ("strong" if "strong" in valid_levels else (valid_levels[0] if valid_levels else levels[0]))
     rec_rgb=dict(variants)[recommended]; raster=args.output_dir/"maze_recommended_A4.png"; make_a4_raster(rec_rgb,raster)
     if args.pdf: make_image_only_pdf(raster,args.output_dir/"maze_recommended_A4.pdf")
-    config={"input":str(args.input.resolve()),"output_dir":str(args.output_dir.resolve()),"seed":args.seed,"roi":roi,"analysis":asdict(analysis),"levels":levels,"parameters":LEVEL_PARAMS,"no_perspective":args.no_perspective,"validations":validations,"attempts":attempts,"recommended":recommended,"pdf_generated":bool(args.pdf)}
+    config={"input":str(args.input.resolve()),"output_dir":str(args.output_dir.resolve()),"seed":args.seed,"roi":roi,"analysis":asdict(analysis),"levels":levels,"parameters":LEVEL_PARAMS,"no_perspective":args.no_perspective,"perspective_requested":not args.no_perspective,"validations":validations,"attempts":attempts,"recommended":recommended,"pdf_generated":bool(args.pdf)}
     (args.output_dir/"run_config.json").write_text(json.dumps(config,indent=2,ensure_ascii=False),encoding="utf-8")
     print(json.dumps({"roi":roi,"estimated_wall_width_px":wall_width,"recommended":recommended,"validations":validations},ensure_ascii=False,indent=2))
     return 0
