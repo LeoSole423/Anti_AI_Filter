@@ -16,7 +16,9 @@ from degrade_maze import (apply_elastic_warp, build_safety_masks, estimate_wall_
                           generate_displacement_field, validate_displacement_jacobian,
                           validate_topology, ValidationResult, AttemptResult,
                           VariantResult, MAX_VARIANT_ATTEMPTS, generate_variant,
-                          validation_failure_reasons)
+                          validation_failure_reasons, compare_component_identity,
+                          build_topology_reference, validate_seed_correspondence,
+                          validate_post_render)
 from skimage.measure import euler_number
 
 
@@ -277,3 +279,85 @@ def test_all_fail_returns_nonzero_and_does_not_make_recommendation(tmp_path, mon
     assert not (out / "maze_recommended_A4.pdf").exists()
     assert not list(out.glob("maze_*.png"))
     assert not list(out.glob("maze_*.jpg"))
+
+
+def test_component_identity_detects_compensated_split_and_merge():
+    expected = np.zeros((80, 140), np.uint16)
+    expected[10:35, 10:40] = 1
+    expected[10:35, 55:85] = 2
+    expected[45:70, 55:85] = 3
+    candidate = np.zeros_like(expected, np.uint8)
+    candidate[10:22, 10:40] = 1
+    candidate[23:35, 10:40] = 1
+    candidate[10:35, 55:85] = 1
+    candidate[45:70, 55:85] = 1
+    candidate[34:47, 65:75] = 1
+    result = compare_component_identity(expected, candidate, np.ones_like(candidate), 4)
+    assert result.splits > 0
+    assert result.merges > 0
+    assert not result.passed
+
+
+def test_free_identity_detects_corridor_closure():
+    expected = np.ones((40, 100), np.uint16)
+    candidate = np.ones((40, 100), np.uint8)
+    candidate[19:21, :] = 0
+    result = compare_component_identity(expected, candidate, np.ones_like(candidate), 4)
+    assert result.splits > 0
+    assert result.merges == 0
+    assert not result.passed
+
+
+def test_identity_ignores_sub_threshold_aliasing():
+    expected = np.zeros((50, 70), np.uint16)
+    expected[10:40, 10:60] = 1
+    candidate = (expected > 0).astype(np.uint8)
+    candidate[2, 2] = 1
+    result = compare_component_identity(expected, candidate, np.ones_like(candidate), 4)
+    assert result.passed
+    assert result.splits == result.merges == result.missing == result.unexpected == 0
+
+
+def test_seed_collision_and_miss_are_reported():
+    expected = np.zeros((50, 100), np.uint16)
+    expected[15:35, 10:35] = 1
+    expected[15:35, 65:90] = 2
+    merged = (expected > 0).astype(np.uint8)
+    cv2.line(merged, (35, 25), (65, 25), 1, 3)
+    reference = build_topology_reference(merged, merged)
+    collision = validate_seed_correspondence(expected, [1, 2], merged, np.ones_like(merged), 4)
+    assert collision.collisions > 0
+    missing = validate_seed_correspondence(expected, [1, 2], (expected == 1).astype(np.uint8), np.ones_like(merged), 4)
+    assert missing.misses > 0
+    assert reference.wall_ids
+
+
+def test_core_geometry_rejects_same_area_displacement():
+    expected = np.zeros((80, 100), np.uint8)
+    expected[20:40, 20:60] = 1
+    shifted = np.zeros_like(expected)
+    shifted[20:40, 30:70] = 1
+    result = validate_topology(expected, shifted, expected, shifted,
+                               jacobian_min=.9, crop_recall=1.0,
+                               expected_core=expected)
+    assert result.wall_core_recall < .995
+    assert result.wall_core_precision < .995
+    assert not result.core_geometry
+
+
+def test_post_render_rejects_corridor_closure():
+    wall = np.zeros((60, 120), np.uint8)
+    cv2.rectangle(wall, (8, 8), (111, 51), 1, 4)
+    reference = build_topology_reference(wall, wall)
+    expected_wall = reference.wall_labels
+    expected_free = reference.free_labels
+    domain = reference.domain_mask
+    masks = build_safety_masks(wall, 4.0)
+    rendered = np.full((60, 120, 3), 245, np.uint8)
+    rendered[wall > 0] = (30, 35, 45)
+    # A dark bridge closes the free corridor only in the rendered image.
+    rendered[28:32, 8:112] = (30, 35, 45)
+    post = validate_post_render(rendered, reference, expected_wall, expected_free,
+                                domain, masks, np.zeros_like(wall))
+    assert not post.passed
+    assert post.free_identity.missing > 0 or post.free_identity.splits > 0

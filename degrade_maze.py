@@ -53,6 +53,56 @@ class ImageAnalysis:
 
 
 @dataclass
+class ComponentCorrespondenceResult:
+    passed: bool
+    splits: int
+    merges: int
+    missing: int
+    unexpected: int
+    min_expected_coverage: float
+    min_candidate_purity: float
+    per_label: Dict
+
+
+@dataclass
+class SeedValidationResult:
+    seed_count: int
+    misses: int
+    collisions: int
+    per_label: Dict
+
+
+@dataclass
+class SkeletonSignature:
+    endpoints: int
+    junctions: int
+
+
+@dataclass
+class PostRenderValidation:
+    passed: bool
+    contrast_gap: float
+    threshold: float
+    min_seed_clearance_px: float
+    p05_corridor_clearance_px: float
+    seed_misses: int
+    seed_collisions: int
+    wall_identity: ComponentCorrespondenceResult
+    free_identity: ComponentCorrespondenceResult
+
+
+@dataclass
+class TopologyReference:
+    domain_mask: np.ndarray
+    wall_labels: np.ndarray
+    free_labels: np.ndarray
+    wall_ids: List[int]
+    free_ids: List[int]
+    wall_core: np.ndarray
+    min_component_area: int
+
+
+@dataclass
 class ValidationResult:
     jacobian: bool
     wall_components: bool
@@ -69,11 +119,36 @@ class ValidationResult:
     candidate_euler: int
     wall_core_recall: float
     crop_recall: float
+    wall_core_precision: float = 1.0
+    wall_label_identity: bool = True
+    free_label_identity: bool = True
+    core_geometry: bool = True
+    post_render_topology: bool = True
+    wall_identity: Optional[ComponentCorrespondenceResult] = None
+    free_identity: Optional[ComponentCorrespondenceResult] = None
+    wall_seeds: Optional[SeedValidationResult] = None
+    free_seeds: Optional[SeedValidationResult] = None
+    skeleton_original: Optional[SkeletonSignature] = None
+    skeleton_candidate: Optional[SkeletonSignature] = None
+    post_render: Optional[PostRenderValidation] = None
+
+    def gate_checks(self) -> Dict[str, bool]:
+        return {
+            "jacobian": self.jacobian,
+            "wall_components": self.wall_components,
+            "free_space_components": self.free_space_components,
+            "euler": self.euler,
+            "no_crop": self.no_crop,
+            "wall_core_integrity": self.wall_core_integrity,
+            "wall_label_identity": self.wall_label_identity,
+            "free_label_identity": self.free_label_identity,
+            "core_geometry": self.core_geometry,
+            "post_render_topology": self.post_render_topology,
+        }
 
     @property
     def passed(self) -> bool:
-        return all((self.jacobian, self.wall_components, self.free_space_components,
-                    self.euler, self.no_crop, self.wall_core_integrity))
+        return all(self.gate_checks().values())
 
 
 @dataclass(frozen=True)
@@ -245,6 +320,30 @@ def build_safety_masks(wall_mask: np.ndarray, wall_width: float) -> Dict[str, np
     return {"wall_mask": wall, "wall_core": core, "wall_edge": edge, "corridor_core": corridor_core}
 
 
+def _filtered_component_labels(mask: np.ndarray, min_area: Optional[int] = None) -> Tuple[np.ndarray, List[int], int]:
+    """Label only components accepted by the existing component-size policy."""
+    binary = (mask > 0).astype(np.uint8)
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(binary, 8)
+    minimum = int(min_area if min_area is not None else max(4, binary.size * 1e-6))
+    ids = [int(i) for i in range(1, n) if int(stats[i, cv2.CC_STAT_AREA]) >= minimum]
+    if not ids:
+        return np.zeros_like(binary, dtype=np.uint16), [], minimum
+    accepted = np.isin(labels, ids)
+    return np.where(accepted, labels, 0).astype(np.uint16), ids, minimum
+
+
+def build_topology_reference(wall_mask: np.ndarray, wall_core: np.ndarray,
+                             domain_mask: Optional[np.ndarray] = None) -> TopologyReference:
+    """Create the one identity-preserving wall/free reference used by a run."""
+    domain = np.ones_like(wall_mask, dtype=np.uint8) if domain_mask is None else (domain_mask > 0).astype(np.uint8)
+    wall = ((wall_mask > 0) & (domain > 0)).astype(np.uint8)
+    free = ((domain > 0) & ~(wall > 0)).astype(np.uint8)
+    wall_labels, wall_ids, minimum = _filtered_component_labels(wall)
+    free_labels, free_ids, _ = _filtered_component_labels(free, minimum)
+    return TopologyReference(domain, wall_labels, free_labels, wall_ids, free_ids,
+                             ((wall_core > 0) & (domain > 0)).astype(np.uint8), minimum)
+
+
 def generate_displacement_field(shape: Tuple[int, int], rng: np.random.Generator, amplitude_px: float, sigma_fraction: float = 0.04) -> Tuple[np.ndarray, np.ndarray]:
     h, w = shape
     sigma = max(2.0, sigma_fraction * min(h, w))
@@ -268,6 +367,16 @@ def apply_elastic_warp(image: np.ndarray, dx: np.ndarray, dy: np.ndarray, interp
     h, w = image.shape[:2]
     x, y = np.meshgrid(np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32))
     return cv2.remap(image, x + dx.astype(np.float32), y + dy.astype(np.float32), interpolation=interpolation, borderMode=border_mode, borderValue=border_value)
+
+
+def warp_label_map(labels: np.ndarray, dx: np.ndarray, dy: np.ndarray,
+                   perspective_transform: PerspectiveTransform) -> np.ndarray:
+    """Warp integer identities with nearest-neighbour and constant background."""
+    labels = np.asarray(labels, dtype=np.uint16)
+    elastic = apply_elastic_warp(labels, dx, dy, cv2.INTER_NEAREST, cv2.BORDER_CONSTANT, 0)
+    warped = apply_perspective_transform(elastic, perspective_transform, cv2.INTER_NEAREST,
+                                         border_value=0)
+    return np.rint(warped).astype(np.uint16)
 
 
 def build_perspective_transform(shape: Tuple[int, int], rng: np.random.Generator, strength: float, extra_margin_px: int = 0) -> PerspectiveTransform:
@@ -428,26 +537,248 @@ def apply_resampling(rgb: np.ndarray, rng: np.random.Generator, ratio: float) ->
 
 
 def _component_count(mask: np.ndarray) -> int:
-    n, _, stats, _ = cv2.connectedComponentsWithStats((mask > 0).astype(np.uint8), 8)
-    areas = stats[1:, cv2.CC_STAT_AREA]
-    return int(np.sum(areas > max(4, mask.size*1e-6))) if len(areas) else 0
+    _, ids, _ = _filtered_component_labels(mask)
+    return len(ids)
 
 
-def validate_topology(original_wall: np.ndarray, candidate_wall: np.ndarray, original_core: np.ndarray, candidate_core: np.ndarray, original_free: Optional[np.ndarray] = None, candidate_free: Optional[np.ndarray] = None, jacobian_min: float = 1.0, crop_recall: Optional[float] = None) -> ValidationResult:
+def compare_component_identity(expected_labels: np.ndarray, candidate_binary: np.ndarray,
+                               valid_domain: np.ndarray, min_component_area: int,
+                               require_quality: bool=True) -> ComponentCorrespondenceResult:
+    """Compare expected identities to candidate components through overlap."""
+    expected = np.asarray(expected_labels, dtype=np.uint16)
+    domain = (valid_domain > 0)
+    candidate_labels, candidate_ids, _ = _filtered_component_labels(
+        (candidate_binary > 0) & domain, min_component_area)
+    expected_ids = [int(x) for x in np.unique(expected[domain]) if x > 0]
+    expected_areas = {eid: int(np.count_nonzero((expected == eid) & domain)) for eid in expected_ids}
+    candidate_areas = {cid: int(np.count_nonzero(candidate_labels == cid)) for cid in candidate_ids}
+    expected_to_candidates: Dict[int, List[Tuple[int, int]]] = {}
+    candidate_to_expected: Dict[int, List[Tuple[int, int]]] = {}
+    for eid in expected_ids:
+        values, counts = np.unique(candidate_labels[(expected == eid) & domain], return_counts=True)
+        significant = max(3, int(round(0.005 * expected_areas[eid])))
+        expected_to_candidates[eid] = [(int(cid), int(count)) for cid, count in zip(values, counts)
+                                       if cid > 0 and int(count) >= significant]
+    for cid in candidate_ids:
+        values, counts = np.unique(expected[(candidate_labels == cid) & domain], return_counts=True)
+        significant = max(3, int(round(0.005 * candidate_areas[cid])))
+        candidate_to_expected[cid] = [(int(eid), int(count)) for eid, count in zip(values, counts)
+                                      if eid > 0 and int(count) >= significant]
+
+    splits = sum(len(matches) > 1 for matches in expected_to_candidates.values())
+    missing = sum(len(matches) == 0 for matches in expected_to_candidates.values())
+    merges = sum(len(matches) > 1 for matches in candidate_to_expected.values())
+    unexpected = sum(len(matches) == 0 for matches in candidate_to_expected.values())
+    coverages = []
+    for eid, matches in expected_to_candidates.items():
+        dominant = max((count for _, count in matches), default=0)
+        coverages.append(dominant / max(1, expected_areas[eid]))
+    purities = []
+    for cid, matches in candidate_to_expected.items():
+        dominant = max((count for _, count in matches), default=0)
+        purities.append(dominant / max(1, candidate_areas[cid]))
+    per_label = {
+        "expected": {str(eid): {"area": expected_areas[eid], "matches": matches}
+                     for eid, matches in expected_to_candidates.items()},
+        "candidate": {str(cid): {"area": candidate_areas[cid], "matches": matches}
+                       for cid, matches in candidate_to_expected.items()},
+    }
+    min_coverage = float(min(coverages)) if coverages else 1.0
+    min_purity = float(min(purities)) if purities else 1.0
+    passed = (splits == 0 and merges == 0 and missing == 0 and unexpected == 0
+              and (not require_quality or (min_coverage >= 0.98 and min_purity >= 0.98)))
+    return ComponentCorrespondenceResult(bool(passed), splits, merges, missing, unexpected,
+                                         min_coverage, min_purity, per_label)
+
+
+def _interior_seeds(expected_labels: np.ndarray, ids: Sequence[int], valid_domain: np.ndarray) -> Dict[int, List[Tuple[int, int]]]:
+    seeds: Dict[int, List[Tuple[int, int]]] = {}
+    domain = valid_domain > 0
+    for label_id in ids:
+        component = ((expected_labels == int(label_id)) & domain).astype(np.uint8)
+        area = int(component.sum())
+        if area == 0:
+            seeds[int(label_id)] = []
+            continue
+        distance = cv2.distanceTransform(component * 255, cv2.DIST_L2, 5)
+        count = 3 if area >= 1000 else 1
+        chosen: List[Tuple[int, int]] = []
+        min_separation = max(3.0, math.sqrt(area) * 0.10)
+        working = distance.copy()
+        for _ in range(count):
+            _, maximum, _, location = cv2.minMaxLoc(working)
+            if maximum <= 0:
+                break
+            x, y = int(location[0]), int(location[1])
+            chosen.append((x, y))
+            cv2.circle(working, (x, y), int(math.ceil(min_separation)), 0, -1)
+        seeds[int(label_id)] = chosen
+    return seeds
+
+
+def validate_seed_correspondence(expected_labels: np.ndarray, ids: Sequence[int],
+                                 candidate_binary: np.ndarray, valid_domain: np.ndarray,
+                                 min_component_area: int) -> SeedValidationResult:
+    candidate_labels, _, _ = _filtered_component_labels(
+        (candidate_binary > 0) & (valid_domain > 0), min_component_area)
+    seeds = _interior_seeds(expected_labels, ids, valid_domain)
+    misses = 0
+    candidates_by_expected: Dict[int, List[int]] = {}
+    for expected_id, points in seeds.items():
+        values = [int(candidate_labels[y, x]) for x, y in points]
+        nonzero = sorted(set(value for value in values if value > 0))
+        if not points or len(nonzero) != 1 or any(value == 0 for value in values):
+            misses += 1
+        candidates_by_expected[expected_id] = nonzero
+    collisions = 0
+    reverse: Dict[int, List[int]] = {}
+    for expected_id, candidate_ids in candidates_by_expected.items():
+        for candidate_id in candidate_ids:
+            reverse.setdefault(candidate_id, []).append(expected_id)
+    collisions = sum(len(expected_ids) > 1 for expected_ids in reverse.values())
+    return SeedValidationResult(sum(len(points) for points in seeds.values()), misses,
+                                collisions, {str(k): v for k, v in candidates_by_expected.items()})
+
+
+def skeleton_signature(mask: np.ndarray) -> SkeletonSignature:
+    skeleton = skeletonize(mask > 0)
+    neighbours = cv2.filter2D(skeleton.astype(np.uint8), cv2.CV_16U,
+                              np.ones((3, 3), np.uint8)) - skeleton.astype(np.uint8)
+    endpoints = int(np.count_nonzero(skeleton & (neighbours == 1)))
+    junction_pixels = (skeleton & (neighbours >= 3)).astype(np.uint8)
+    junction_components, _ = cv2.connectedComponents(junction_pixels, 8)
+    return SkeletonSignature(endpoints, max(0, int(junction_components - 1)))
+
+
+def _identity_debug(result: Optional[ComponentCorrespondenceResult]) -> Dict:
+    return asdict(result) if result is not None else {}
+
+
+def validate_post_render(rgb: np.ndarray, topology: TopologyReference,
+                         expected_wall_labels: np.ndarray, expected_free_labels: np.ndarray,
+                         expected_domain: np.ndarray, candidate_masks: Dict[str, np.ndarray],
+                         marker: np.ndarray, distractor_mask: Optional[np.ndarray]=None) -> PostRenderValidation:
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    protected_marker = marker > 0
+    wall_pixels = (candidate_masks["wall_core"] > 0) & ~protected_marker
+    free_pixels = (candidate_masks["corridor_core"] > 0) & ~protected_marker
+    wall_hi = float(np.percentile(gray[wall_pixels], 90)) if wall_pixels.any() else 100.0
+    free_lo = float(np.percentile(gray[free_pixels], 10)) if free_pixels.any() else 220.0
+    contrast_gap = free_lo - wall_hi
+    # Bias the supervised segmentation toward retaining ink.  A midpoint is
+    # vulnerable to anti-aliased wall edges becoming free-space leaks after
+    # resampling; this conservative threshold remains below the measured safe
+    # corridor luminance and does not manufacture dark pixels.
+    domain = (expected_domain > 0).astype(np.uint8)
+    thresholds = [wall_hi + fraction * (free_lo - wall_hi) for fraction in (0.50, 0.70, 0.85)]
+    evaluations: List[PostRenderValidation] = []
+    for threshold in thresholds:
+        render_wall = (gray <= threshold).astype(np.uint8)
+        render_wall[protected_marker] = 0
+        # Known light fibres are visual artifacts, not structural ink.  Excluding
+        # their exact procedural mask prevents the conservative threshold from
+        # turning them into unexpected maze components.
+        if distractor_mask is not None:
+            render_wall[distractor_mask > 0] = 0
+        render_free = cv2.bitwise_and(domain, (render_wall == 0).astype(np.uint8))
+        wall_identity = compare_component_identity(expected_wall_labels, render_wall, domain,
+                                                   topology.min_component_area, require_quality=False)
+        free_identity = compare_component_identity(expected_free_labels, render_free, domain,
+                                                   topology.min_component_area, require_quality=False)
+        free_seeds = validate_seed_correspondence(expected_free_labels, topology.free_ids,
+                                                   render_free, domain, topology.min_component_area)
+        clearance = cv2.distanceTransform(render_free * 255, cv2.DIST_L2, 5)
+        seed_points = _interior_seeds(expected_free_labels, topology.free_ids, domain)
+        seed_clearances = [float(clearance[y, x]) for points in seed_points.values() for x, y in points]
+        min_clearance = float(min(seed_clearances)) if seed_clearances else 0.0
+        free_distances = clearance[render_free > 0]
+        p05_clearance = float(np.percentile(free_distances, 5)) if free_distances.size else 0.0
+        passed = bool(contrast_gap >= 20.0 and wall_identity.passed and free_identity.passed
+                      and free_seeds.misses == 0 and free_seeds.collisions == 0 and min_clearance > 0.0)
+        evaluations.append(PostRenderValidation(passed, contrast_gap, threshold, min_clearance,
+                                                 p05_clearance, free_seeds.misses,
+                                                 free_seeds.collisions, wall_identity, free_identity))
+        if passed:
+            return evaluations[-1]
+    # Preserve the most informative failed segmentation in diagnostics.
+    def score(item: PostRenderValidation) -> Tuple[int, int, float]:
+        failures = (not item.wall_identity.passed) + (not item.free_identity.passed) + bool(item.seed_misses) + bool(item.seed_collisions) + (item.min_seed_clearance_px <= 0)
+        unexpected = item.wall_identity.unexpected + item.free_identity.unexpected
+        return int(failures), int(unexpected), -item.min_seed_clearance_px
+    return min(evaluations, key=score)
+
+
+def _label_debug_image(labels: np.ndarray) -> np.ndarray:
+    labels = np.asarray(labels, dtype=np.uint16)
+    if int(labels.max()) == 0:
+        return np.zeros((*labels.shape, 3), dtype=np.uint8)
+    scaled = cv2.normalize(labels, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+    return cv2.applyColorMap(scaled, cv2.COLORMAP_TURBO)
+
+
+def save_topology_debug(debug_dir: Path, level: str, expected_wall_labels: np.ndarray,
+                        candidate_wall: np.ndarray, expected_free_labels: np.ndarray,
+                        candidate_free: np.ndarray, render_wall: Optional[np.ndarray],
+                        wall_identity: Optional[ComponentCorrespondenceResult],
+                        free_identity: Optional[ComponentCorrespondenceResult],
+                        post_render: Optional[PostRenderValidation]) -> None:
+    topology_dir = debug_dir / "topology" / level
+    topology_dir.mkdir(parents=True, exist_ok=True)
+    candidate_wall_labels, _, _ = _filtered_component_labels(candidate_wall)
+    candidate_free_labels, _, _ = _filtered_component_labels(candidate_free)
+    cv2.imwrite(str(topology_dir / "expected_wall_labels.png"), _label_debug_image(expected_wall_labels))
+    cv2.imwrite(str(topology_dir / "candidate_wall_labels.png"), _label_debug_image(candidate_wall_labels))
+    cv2.imwrite(str(topology_dir / "expected_free_labels.png"), _label_debug_image(expected_free_labels))
+    cv2.imwrite(str(topology_dir / "candidate_free_labels.png"), _label_debug_image(candidate_free_labels))
+    if render_wall is not None:
+        cv2.imwrite(str(topology_dir / "render_wall_mask.png"), (render_wall > 0).astype(np.uint8) * 255)
+    (topology_dir / "correspondence_wall.json").write_text(json.dumps(
+        _identity_debug(wall_identity), indent=2, ensure_ascii=False), encoding="utf-8")
+    (topology_dir / "correspondence_free.json").write_text(json.dumps(
+        _identity_debug(free_identity), indent=2, ensure_ascii=False), encoding="utf-8")
+    if post_render is not None:
+        (topology_dir / "post_render.json").write_text(json.dumps(
+            asdict(post_render), indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def validate_topology(original_wall: np.ndarray, candidate_wall: np.ndarray, original_core: np.ndarray,
+                      candidate_core: np.ndarray, original_free: Optional[np.ndarray] = None,
+                      candidate_free: Optional[np.ndarray] = None, jacobian_min: float = 1.0,
+                      crop_recall: Optional[float] = None, topology: Optional[TopologyReference] = None,
+                      expected_wall_labels: Optional[np.ndarray] = None,
+                      expected_free_labels: Optional[np.ndarray] = None,
+                      expected_domain: Optional[np.ndarray] = None,
+                      expected_core: Optional[np.ndarray] = None,
+                      post_render: Optional[PostRenderValidation] = None) -> ValidationResult:
     ow, cw = original_wall > 0, candidate_wall > 0
     of = ~ow if original_free is None else original_free > 0
     cf = ~cw if candidate_free is None else candidate_free > 0
     oc, cc = _component_count(ow), _component_count(cw)
     ofc, cfc = _component_count(of), _component_count(cf)
     oe = int(euler_number(ow, connectivity=2)); ce = int(euler_number(cw, connectivity=2))
-    # The candidate core is already in the deformed coordinate system.  Compare
-    # retained protected area, not same-coordinate overlap (a valid warp moves it).
-    source_area = max(1, int((original_core > 0).sum()))
+    geometric_core = expected_core is not None
+    expected_core = original_core if expected_core is None else expected_core
+    source_area = max(1, int((expected_core > 0).sum()))
     candidate_area = int((candidate_core > 0).sum())
-    recall = float(min(1.0, candidate_area / source_area))
+    intersection = int(np.count_nonzero((expected_core > 0) & (candidate_core > 0)))
+    recall = float(intersection / source_area) if geometric_core else float(min(1.0, candidate_area / source_area))
+    precision = float(intersection / max(1, candidate_area)) if geometric_core else float(min(1.0, source_area / max(1, candidate_area)))
     if crop_recall is None:
         crop_recall = float(cw.sum() / max(1, ow.sum()))
     no_crop = bool(crop_recall >= 0.995)
+    wall_identity = None
+    free_identity = None
+    wall_seeds = None
+    free_seeds = None
+    if topology is not None and expected_wall_labels is not None and expected_free_labels is not None and expected_domain is not None:
+        candidate_domain = expected_domain > 0
+        wall_identity = compare_component_identity(expected_wall_labels, candidate_wall, candidate_domain, topology.min_component_area)
+        free_identity = compare_component_identity(expected_free_labels, candidate_free if candidate_free is not None else ~candidate_wall, candidate_domain, topology.min_component_area)
+        wall_seeds = validate_seed_correspondence(expected_wall_labels, topology.wall_ids, candidate_wall, candidate_domain, topology.min_component_area)
+        free_seeds = validate_seed_correspondence(expected_free_labels, topology.free_ids, candidate_free if candidate_free is not None else ~candidate_wall, candidate_domain, topology.min_component_area)
+    skeleton_original = skeleton_signature(original_wall)
+    skeleton_candidate = skeleton_signature(candidate_wall)
+    core_geometry = bool(recall >= 0.995 and precision >= 0.995) if geometric_core else True
     return ValidationResult(
         jacobian=bool(jacobian_min > 0.60), wall_components=oc == cc,
         free_space_components=ofc == cfc, euler=oe == ce, no_crop=no_crop,
@@ -455,7 +786,15 @@ def validate_topology(original_wall: np.ndarray, candidate_wall: np.ndarray, ori
         original_wall_components=oc, candidate_wall_components=cc,
         original_free_components=ofc, candidate_free_components=cfc,
         original_euler=oe, candidate_euler=ce, wall_core_recall=recall,
-        crop_recall=float(crop_recall))
+        crop_recall=float(crop_recall), wall_core_precision=precision,
+        wall_label_identity=True if wall_identity is None else wall_identity.passed,
+        free_label_identity=True if free_identity is None else free_identity.passed,
+        core_geometry=core_geometry,
+        post_render_topology=True if post_render is None else post_render.passed,
+        wall_identity=wall_identity, free_identity=free_identity,
+        wall_seeds=wall_seeds, free_seeds=free_seeds,
+        skeleton_original=skeleton_original, skeleton_candidate=skeleton_candidate,
+        post_render=post_render)
 
 
 def run_recovery_proxies(rgb: np.ndarray, out_dir: Path) -> Dict[str, str]:
@@ -535,15 +874,7 @@ def make_image_only_pdf(raster_path: Path, pdf_path: Path) -> None:
 
 def validation_failure_reasons(validation: ValidationResult) -> List[str]:
     """Return stable, machine-readable reasons for a failed attempt."""
-    checks = (
-        ("jacobian", validation.jacobian),
-        ("wall_components", validation.wall_components),
-        ("free_space_components", validation.free_space_components),
-        ("euler", validation.euler),
-        ("no_crop", validation.no_crop),
-        ("wall_core_integrity", validation.wall_core_integrity),
-    )
-    return [name for name, passed in checks if not passed]
+    return [name for name, passed in validation.gate_checks().items() if not passed]
 
 
 def _save_failed_variant_debug(debug_dir: Path, level: str, attempts: List[AttemptResult],
@@ -573,9 +904,11 @@ def _save_failed_variant_debug(debug_dir: Path, level: str, attempts: List[Attem
 def generate_variant(original_rgb: np.ndarray, wall_mask: np.ndarray, masks: Dict[str,np.ndarray], marker: np.ndarray,
                     wall_width: float, level: str, seed: int, no_perspective: bool=False,
                     debug_dir: Optional[Path]=None, validator=validate_topology,
-                    max_attempts: int=MAX_VARIANT_ATTEMPTS, save_success_debug: bool=True) -> VariantResult:
+                    max_attempts: int=MAX_VARIANT_ATTEMPTS, save_success_debug: bool=True,
+                    topology: Optional[TopologyReference]=None) -> VariantResult:
     p=LEVEL_PARAMS[level]; base_rng=np.random.default_rng(seed)
     amp=float(p["warp"]*wall_width)
+    topology = topology or build_topology_reference(wall_mask, masks["wall_core"])
     attempts: List[AttemptResult] = []
     last_payload = None
     for attempt in range(1, max_attempts + 1):
@@ -600,14 +933,22 @@ def generate_variant(original_rgb: np.ndarray, wall_mask: np.ndarray, masks: Dic
         we=apply_perspective_transform(we,perspective_transform,cv2.INTER_NEAREST,border_value=0)
         cor=apply_perspective_transform(cor,perspective_transform,cv2.INTER_NEAREST,border_value=0)
         mm=apply_perspective_transform(mm,perspective_transform,cv2.INTER_NEAREST,border_value=0)
+        expected_wall_labels=warp_label_map(topology.wall_labels,dx,dy,perspective_transform)
+        expected_free_labels=warp_label_map(topology.free_labels,dx,dy,perspective_transform)
+        expected_domain=warp_label_map(topology.domain_mask,dx,dy,perspective_transform)
+        expected_core=warp_label_map(topology.wall_core,dx,dy,perspective_transform)
         core_bin=(wc>0).astype(np.uint8)
         structural=np.maximum((wm>0).astype(np.uint8), core_bin)
         edge_bin=np.maximum((we>0).astype(np.uint8),cv2.subtract(structural,core_bin))
         corridor_bin=cv2.subtract((cor>0).astype(np.uint8),structural)
         candidate_masks={"wall_mask":structural,"wall_core":core_bin,"wall_edge":edge_bin,"corridor_core":corridor_bin}
         crop_recall=calculate_crop_recall(wm_full,perspective_transform.crop_window)
+        candidate_free=((expected_domain > 0) & ~(structural > 0)).astype(np.uint8)
         val=validator(wall_mask,candidate_masks["wall_mask"],masks["wall_core"],candidate_masks["wall_core"],
-                      jacobian_min=jmin,crop_recall=crop_recall)
+                      original_free=topology.domain_mask & ~(wall_mask > 0), candidate_free=candidate_free,
+                      jacobian_min=jmin,crop_recall=crop_recall, topology=topology,
+                      expected_wall_labels=expected_wall_labels, expected_free_labels=expected_free_labels,
+                      expected_domain=expected_domain, expected_core=expected_core)
         val.jacobian = jac_ok
         metadata=dict(attempt=attempt, scale=scale, amp_px=amp*scale, jacobian_min=jmin,
             perspective_requested=perspective_requested, perspective_used=perspective_used,
@@ -616,32 +957,49 @@ def generate_variant(original_rgb: np.ndarray, wall_mask: np.ndarray, masks: Dic
             crop_origin=list(perspective_transform.crop_origin), crop_x=perspective_transform.crop_window[0],
             crop_y=perspective_transform.crop_window[1], crop_width=perspective_transform.crop_window[2],
             crop_height=perspective_transform.crop_window[3], crop_recall=crop_recall)
-        reasons=validation_failure_reasons(val)
-        attempt_result=AttemptResult(attempt, scale, amp*scale, perspective_used, jmin, val, reasons, metadata)
-        attempts.append(attempt_result)
         last_payload=(warped,val,metadata,candidate_masks,dx,dy,jac,mm)
-        if val.passed and not reasons:
-            # Only structurally validated candidates reach visual degradation.
-            out=warped.copy()
-            out=np.clip(out.astype(np.float32)+generate_paper_texture(out.shape[:2],base_rng,p["texture"])[...,None],0,255).astype(np.uint8)
-            out=apply_wall_texture(out,candidate_masks,base_rng,p["texture"],mm)
-            out=apply_illumination(out,base_rng,p["illumination"],mm)
-            out,distractors=add_safe_distractors(out,candidate_masks,wall_width,base_rng,p["distractors"],mm)
-            out=apply_optical_degradation(out,base_rng,p["blur"],mm)
-            out=apply_resampling(out,base_rng,p["resample"])
-            ink_color=np.median(warped[candidate_masks["wall_core"]>0],axis=0) if np.any(candidate_masks["wall_core"]>0) else np.array([30,38,55])
-            out[candidate_masks["wall_core"]>0]=np.minimum(out[candidate_masks["wall_core"]>0], np.clip(ink_color,15,90).astype(np.uint8))
-            out[mm>0]=warped[mm>0]
-            if debug_dir is not None and save_success_debug:
-                debug_dir.mkdir(parents=True,exist_ok=True)
-                cv2.imwrite(str(debug_dir/f"displacement_{level}.png"),np.clip(np.dstack([_normalize_field(dx),_normalize_field(dy),np.zeros_like(dx)])*127.5+127.5,0,255).astype(np.uint8))
-                cv2.imwrite(str(debug_dir/f"jacobian_{level}.png"),cv2.normalize(jac,None,0,255,cv2.NORM_MINMAX).astype(np.uint8))
-                cv2.imwrite(str(debug_dir/f"wall_mask_{level}.png"),candidate_masks["wall_mask"]*255)
-                cv2.imwrite(str(debug_dir/f"wall_core_{level}.png"),candidate_masks["wall_core"]*255)
-                cv2.imwrite(str(debug_dir/f"corridor_core_{level}.png"),candidate_masks["corridor_core"]*255)
-                cv2.imwrite(str(debug_dir/f"distractors_{level}.png"),distractors*255)
-            metadata["wall_core_recall"]=val.wall_core_recall
-            return VariantResult(level, "PASS", out, val, attempts, [], candidate_masks)
+        reasons=validation_failure_reasons(val)
+        if not val.passed:
+            attempts.append(AttemptResult(attempt, scale, amp*scale, perspective_used, jmin, val, reasons, metadata))
+            continue
+        # Only structurally validated candidates reach visual degradation.
+        out=warped.copy()
+        out=np.clip(out.astype(np.float32)+generate_paper_texture(out.shape[:2],base_rng,p["texture"])[...,None],0,255).astype(np.uint8)
+        out=apply_wall_texture(out,candidate_masks,base_rng,p["texture"],mm)
+        out=apply_illumination(out,base_rng,p["illumination"],mm)
+        out,distractors=add_safe_distractors(out,candidate_masks,wall_width,base_rng,p["distractors"],mm)
+        out=apply_optical_degradation(out,base_rng,p["blur"],mm)
+        out=apply_resampling(out,base_rng,p["resample"])
+        ink_color=np.median(warped[candidate_masks["wall_core"]>0],axis=0) if np.any(candidate_masks["wall_core"]>0) else np.array([30,38,55])
+        out[candidate_masks["wall_core"]>0]=np.minimum(out[candidate_masks["wall_core"]>0], np.clip(ink_color,15,90).astype(np.uint8))
+        out[mm>0]=warped[mm>0]
+        post=validate_post_render(out, topology, expected_wall_labels, expected_free_labels,
+                                  expected_domain, candidate_masks, mm, distractors)
+        val.post_render=post
+        val.post_render_topology=post.passed
+        reasons=validation_failure_reasons(val)
+        attempts.append(AttemptResult(attempt, scale, amp*scale, perspective_used, jmin, val, reasons, metadata))
+        last_payload=(warped,val,metadata,candidate_masks,dx,dy,jac,mm)
+        if not val.passed:
+            continue
+        if debug_dir is not None and save_success_debug:
+            debug_dir.mkdir(parents=True,exist_ok=True)
+            cv2.imwrite(str(debug_dir/f"displacement_{level}.png"),np.clip(np.dstack([_normalize_field(dx),_normalize_field(dy),np.zeros_like(dx)])*127.5+127.5,0,255).astype(np.uint8))
+            cv2.imwrite(str(debug_dir/f"jacobian_{level}.png"),cv2.normalize(jac,None,0,255,cv2.NORM_MINMAX).astype(np.uint8))
+            cv2.imwrite(str(debug_dir/f"wall_mask_{level}.png"),candidate_masks["wall_mask"]*255)
+            cv2.imwrite(str(debug_dir/f"wall_core_{level}.png"),candidate_masks["wall_core"]*255)
+            cv2.imwrite(str(debug_dir/f"corridor_core_{level}.png"),candidate_masks["corridor_core"]*255)
+            cv2.imwrite(str(debug_dir/f"distractors_{level}.png"),distractors*255)
+            render_gray=cv2.cvtColor(out,cv2.COLOR_RGB2GRAY)
+            render_wall=(render_gray <= post.threshold).astype(np.uint8)
+            render_wall[mm > 0]=0
+            render_wall[distractors > 0]=0
+            save_topology_debug(debug_dir, level, expected_wall_labels, candidate_masks["wall_mask"],
+                                expected_free_labels, candidate_free,
+                                render_wall, val.wall_identity, val.free_identity, post)
+        metadata["wall_core_recall"]=val.wall_core_recall
+        metadata["wall_core_precision"]=val.wall_core_precision
+        return VariantResult(level, "PASS", out, val, attempts, [], candidate_masks)
     reasons=[]
     for item in attempts:
         for reason in item.failure_reasons:
@@ -676,12 +1034,14 @@ def main(argv: Optional[Sequence[str]]=None) -> int:
     rgb,alpha,load_info=load_image(args.input,args.background,return_metadata=True); h,w=rgb.shape[:2]
     roi=parse_roi(args.roi,w,h); roi=detect_maze_roi(rgb,roi)
     marker=detect_protected_markers(rgb); wall,otsu=extract_wall_mask(rgb,roi,marker); wall_width=estimate_wall_width(wall); masks=build_safety_masks(wall,wall_width)
+    domain=np.zeros((h,w),np.uint8); x,y,rw,rh=roi; domain[y:y+rh,x:x+rw]=1
+    topology=build_topology_reference(wall,masks["wall_core"],domain)
     analysis=ImageAnalysis(w,h,rgb.shape[2],roi,otsu,wall_width,float((wall>0).mean()),float((cv2.cvtColor(rgb,cv2.COLOR_RGB2HSV)[...,1]>85).mean()),int(marker.sum()))
     _save_rgb(debug/"wall_mask_original.png",np.repeat((wall*255)[...,None],3,axis=2)); _save_rgb(debug/"wall_core_original.png",np.repeat((masks["wall_core"]*255)[...,None],3,axis=2)); _save_rgb(debug/"corridor_core_original.png",np.repeat((masks["corridor_core"]*255)[...,None],3,axis=2))
     variants=[]; validations={}; attempts={}; results={}; failed_levels=[]
     original_for_sheet=rgb.copy()
     for idx,level in enumerate(levels,1):
-        result=generate_variant(rgb,wall,masks,marker,wall_width,level,args.seed+idx*7919,args.no_perspective,debug,save_success_debug=args.debug)
+        result=generate_variant(rgb,wall,masks,marker,wall_width,level,args.seed+idx*7919,args.no_perspective,debug,save_success_debug=args.debug,topology=topology)
         results[level]=result
         validations[level]=asdict(result.validation) if result.validation is not None else None
         attempts[level]=result.attempts[-1].metadata if result.attempts else {}
